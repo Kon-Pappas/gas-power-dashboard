@@ -114,7 +114,6 @@ function getUnitMetadata(unitName) {
         else result.order = 3;
     }
     
-    // Προσαρμογή του label βάσει γλώσσας
     if (result.order === 3) {
         result.class = (typeof currentLang !== 'undefined' && currentLang === 'el') 
             ? 'Παλαιότερη Γενιά & Peakers' 
@@ -128,7 +127,8 @@ function getUnitMetadata(unitName) {
 // TAB SWITCHING CONTROLLER
 // ==========================================
 function switchTab(tabId) {
-    const tabs = ['overview', 'ispScada', 'economics', 'efficiency'];
+    // Η νέα σειρά των tabs
+    const tabs = ['overview', 'economics', 'ispScada', 'efficiency'];
     tabs.forEach(t => {
         const btn = document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1));
         const view = document.getElementById('view' + t.charAt(0).toUpperCase() + t.slice(1));
@@ -142,7 +142,7 @@ function switchTab(tabId) {
         }
     });
 
-    if (tabId === 'overview') updateDashboard();
+    if (tabId === 'overview') updateOverviewTab();
     if (tabId === 'economics') updateEconomicsTab();
 }
 
@@ -150,12 +150,9 @@ function switchTab(tabId) {
 // MASTER UPDATE TRIGGERS
 // ==========================================
 function updateDashboard() {
+    // Επειδή πλέον το ημερολόγιο είναι global, ενημερώνουμε και τα 2 ενεργά views αμέσως.
     updateOverviewTab();
-    
-    // Αν το tab economics είναι ανοιχτό, κάνε το update και αυτό
-    if (!document.getElementById('viewEconomics').classList.contains('hidden')) {
-        updateEconomicsTab();
-    }
+    updateEconomicsTab();
 }
 
 // ==========================================
@@ -313,7 +310,7 @@ function renderOverviewChart(labels, classLabels, dataIsp, dataScada, ispColors,
 }
 
 // ==========================================
-// TAB 3: ECONOMICS & OUT-OF-MERIT
+// TAB 2: DAILY ECONOMICS
 // ==========================================
 function updateEconomicsTab() {
     const dateSelect = document.getElementById('dateSelect');
@@ -322,12 +319,11 @@ function updateEconomicsTab() {
     const selectedDate = dateSelect.value;
     if (!selectedDate) return;
 
-    // Εύρεση του HGSIDA από το Henex
     let hgsida = 0;
     if (rawData.henex) {
         const henexDay = rawData.henex.find(d => parseDate(Object.values(d)[0]) === selectedDate);
         if (henexDay) {
-            hgsida = parseNum(Object.values(henexDay)[1]); // Υποθέτουμε το HGSIDA είναι η 2η στήλη (index 1)
+            hgsida = parseNum(Object.values(henexDay)[1]); 
         }
     }
 
@@ -337,7 +333,7 @@ function updateEconomicsTab() {
     scadaDay.forEach(d => {
         let uName = String(Object.values(d)[1].trim());
         const val = parseNum(Object.values(d)[2]);
-        if (uName === "TOTAL GAS UNITS" || val <= 0) return; // Αγνοούμε τα 0 και το σύνολο
+        if (uName === "TOTAL GAS UNITS" || val <= 0) return; 
 
         uName = getCanonicalUnitName(uName);
         if (!ecoMap[uName]) ecoMap[uName] = { name: uName, scada: 0, meta: getUnitMetadata(uName) };
@@ -361,23 +357,17 @@ function updateEconomicsTab() {
     unitsArray.forEach(u => {
         totalMwh += u.scada;
         
-        // Μαθηματικά Κόστους
-        // 1. Gas Cost (€/MWh) = (HGSIDA / Efficiency) + CO2 Cost
         const efficiencyRatio = u.meta.eff; 
         const gasCostPerMwh = hgsida > 0 ? (hgsida / efficiencyRatio) + CO2_COST_PER_MWH : 0;
-        
-        // 2. Total Cost
         const unitTotalCost = u.scada * gasCostPerMwh;
+        
         totalCostFleet += unitTotalCost;
-
-        // 3. Καύσιμο για τον Weighted Average Efficiency
         totalTheoreticalFuel += (u.scada / efficiencyRatio);
 
-        // Χρώματα γραμμής ανά Class (αριστερό border)
         let borderClass = "border-l-4 border-slate-700";
-        if (u.meta.order === 1) borderClass = "border-l-4 border-[#06b6d4]"; // Cyan
-        if (u.meta.order === 2) borderClass = "border-l-4 border-[#3b82f6]"; // Blue
-        if (u.meta.order === 3) borderClass = "border-l-4 border-[#f97316]"; // Orange
+        if (u.meta.order === 1) borderClass = "border-l-4 border-[#06b6d4]";
+        if (u.meta.order === 2) borderClass = "border-l-4 border-[#3b82f6]";
+        if (u.meta.order === 3) borderClass = "border-l-4 border-[#f97316]";
 
         const tr = document.createElement('tr');
         tr.className = "hover:bg-slate-700/50 transition-colors group";
@@ -392,17 +382,19 @@ function updateEconomicsTab() {
         tbody.appendChild(tr);
     });
 
-    // Υπολογισμός Weighted Average Efficiency
     const fleetEfficiency = totalTheoreticalFuel > 0 ? (totalMwh / totalTheoreticalFuel) * 100 : 0;
+    const avgGasCost = totalMwh > 0 ? (totalCostFleet / totalMwh) : 0;
 
     // Ενημέρωση Footer Table
     document.getElementById('ecoTableTotalMwh').innerText = totalMwh.toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1});
     document.getElementById('ecoTableAvgEff').innerText = fleetEfficiency.toFixed(2) + '%';
+    document.getElementById('ecoTableAvgGasCost').innerText = avgGasCost > 0 ? avgGasCost.toFixed(2) : '-';
     document.getElementById('ecoTableTotalCost').innerText = formatEuro(totalCostFleet);
 
-    // Ενημέρωση Top KPIs
+    // Ενημέρωση Top KPIs (Κάρτες)
     document.getElementById('kpiHgsida').innerText = hgsida > 0 ? hgsida.toFixed(2) : '-';
     document.getElementById('kpiEcoScada').innerText = totalMwh.toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1});
+    document.getElementById('kpiAvgGasCost').innerText = avgGasCost > 0 ? avgGasCost.toFixed(2) : '-';
     document.getElementById('kpiTotalEcoCost').innerText = totalCostFleet > 0 ? formatEuro(totalCostFleet) : '-';
     document.getElementById('kpiFleetEff').innerText = fleetEfficiency.toFixed(2);
 }
