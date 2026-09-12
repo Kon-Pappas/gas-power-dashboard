@@ -20,7 +20,57 @@ function parseNum(val) {
     return isNaN(n) ? 0 : n;
 }
 
-// Διαβάζει το Class από το Thermal Efficiency data
+// ΕΞΥΠΝΗ ΑΝΤΙΣΤΟΙΧΙΣΗ (Mapping) ΟΝΟΜΑΤΩΝ ΜΟΝΑΔΩΝ ΣΕ CANONICAL NAMES
+function getCanonicalUnitName(rawName) {
+    if (!rawName) return "UNKNOWN";
+    let clean = String(rawName).trim().toUpperCase();
+    clean = clean.replace(/\s*\((ST|GT\d+)\)/gi, '').trim();
+
+    // 1. Komotini Power (Super-Efficient) vs Komotini (Old)
+    if (clean === "KOMOTINI_POWER") return "KOMOTINI_POWER";
+    if (clean.includes("KOMOTINI") || clean.includes("ΚΟΜΟΤΗΝΗ")) {
+        // Αν είναι η παλιά μονάδα ή γενική αναφορά χωρίς power
+        if (clean.includes("POWER")) return "KOMOTINI_POWER";
+        return "ΚΟΜΟΤΗΝΗ";
+    }
+    
+    // 2. Agios Nikolaos 2
+    if (clean.includes("AG_NIKOLAOS") || clean.includes("ΑΓ. ΝΙΚΟΛΑΟΣ") || clean.includes("AGIOS NIKOLAOS")) return "AG_NIKOLAOS2";
+    
+    // 3. Protergia / Thessaloniki CCGT -> Protergia CC
+    if (clean.includes("PROTERGIA") || clean.includes("THESSALONIKI")) return "PROTERGIA_CC";
+    
+    // 4. Heron CCGT -> ΘΗΣ ΗΡΩΝ
+    if (clean.includes("HERON") || clean.includes("ΘΗΣ ΗΡΩΝ") || clean.includes("ΗΡΩΝ")) return "ΘΗΣ ΗΡΩΝ";
+    
+    // 5. Megalopolis 5
+    if (clean.includes("MEGALOPOLI") || clean.includes("ΜΕΓΑΛΟΠΟΛΗ")) return "ΜΕΓΑΛΟΠΟΛΗ 5";
+    
+    // 6. Elpedison Thisvi
+    if (clean.includes("THISVI") || clean.includes("ΘΗΣΒ")) return "ELPEDISON_THISVI";
+    
+    // 7. Korinthos Power
+    if (clean.includes("KORINTHOS") || clean.includes("ΚΟΡΙΝΘΟΣ")) return "KORINTHOS_POWER";
+    
+    // 8. Elpedison Thessaloniki
+    if (clean.includes("THESS") && clean.includes("ELPEDISON")) return "ELPEDISON_THESS";
+    
+    // 9. Aliveri 5
+    if (clean.includes("ALIVERI") || clean.includes("ΑΛΙΒΕΡΙ")) return "ΑΛΙΒΕΡΙ 5";
+    
+    // 10. Lavrio 5 (Προσοχή: να μπει ΠΡΙΝ το Lavrio 4)
+    if (clean.includes("LAVRIO 5") || clean.includes("ΛΑΥΡΙΟ 5") || clean.includes("LAVRIO5")) return "ΛΑΥΡΙΟ 5";
+    
+    // 11. Lavrio 4
+    if (clean.includes("LAVRIO 4") || clean.includes("ΛΑΥΡΙΟ 4") || clean.includes("LAVRIO4") || clean.includes("ΛΑΥΡΙΟ") || clean.includes("LAVRIOS")) return "ΛΑΥΡΙΟ 4";
+    
+    // 12. Aluminium
+    if (clean.includes("ALOUMINIO") || clean.includes("ΑΛΟΥΜΙΝΙΟ") || clean.includes("ALUM")) return "ΑΛΟΥΜΙΝΙΟ";
+
+    return clean;
+}
+
+// Διαβάζει το Class από το Thermal Efficiency data βάσει canonical name
 function getUnitMetadata(unitName) {
     let result = { 
         class: 'Older Generation & Peakers', 
@@ -30,9 +80,12 @@ function getUnitMetadata(unitName) {
     
     if (!rawData || !rawData.efficiency) return result;
 
-    const record = rawData.efficiency.find(r => 
-        String(Object.values(r)[1]).trim().toUpperCase() === unitName.toUpperCase()
-    );
+    const canonical = getCanonicalUnitName(unitName);
+
+    const record = rawData.efficiency.find(r => {
+        const sheetUnit = String(Object.values(r)[1]).trim().toUpperCase();
+        return sheetUnit === canonical || sheetUnit === unitName.toUpperCase();
+    });
 
     if (record) {
         const rawClass = Object.values(record)[0];
@@ -93,23 +146,25 @@ function updateDashboard() {
     const unitMap = {};
 
     ispDay.forEach(d => {
-        const uName = String(Object.values(d)[1]).trim();
+        let uName = String(Object.values(d)[1]).trim();
         const val = parseNum(Object.values(d)[2]);
         if (uName === "TOTAL GAS UNITS") {
             totalIsp = val;
             return;
         }
+        uName = getCanonicalUnitName(uName);
         if (!unitMap[uName]) unitMap[uName] = { name: uName, isp: 0, scada: 0, meta: getUnitMetadata(uName) };
         unitMap[uName].isp += val;
     });
 
     scadaDay.forEach(d => {
-        const uName = String(Object.values(d)[1]).trim();
+        let uName = String(Object.values(d)[1]).trim();
         const val = parseNum(Object.values(d)[2]);
         if (uName === "TOTAL GAS UNITS") {
             totalScada = val;
             return;
         }
+        uName = getCanonicalUnitName(uName);
         if (!unitMap[uName]) unitMap[uName] = { name: uName, isp: 0, scada: 0, meta: getUnitMetadata(uName) };
         unitMap[uName].scada += val;
     });
