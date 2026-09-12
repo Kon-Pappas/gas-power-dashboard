@@ -83,7 +83,6 @@
                 </div>
             </div>
 
-            <!-- Grouped Chart Container -->
             <div class="bg-slate-800/40 p-6 rounded-xl border border-slate-700">
                 <div class="flex flex-col lg:flex-row justify-between items-start mb-6 gap-4">
                     <div>
@@ -91,7 +90,6 @@
                         <p class="text-xs text-slate-400">Units dynamically sorted by Efficiency Class (Merit Order proxy)</p>
                     </div>
                     
-                    <!-- Comprehensive Custom Legend -->
                     <div class="flex flex-col sm:flex-row gap-6 text-xs font-medium bg-slate-900/50 p-3 rounded-lg border border-slate-700">
                         <div class="flex flex-col gap-2">
                             <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Thermal Classes</span>
@@ -123,8 +121,73 @@
             <!-- ISP vs SCADA Content -->
         </div>
 
-        <div id="viewEconomics" class="space-y-8 hidden">
-            <!-- Economics Content -->
+        <!-- VIEW 3: ECONOMICS & OUT-OF-MERIT -->
+        <div id="viewEconomics" class="space-y-6 hidden">
+            
+            <!-- KPIs Header -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700 flex flex-col justify-center">
+                    <span class="text-xs text-slate-400 uppercase tracking-wider">HGSIDA Gas Price</span>
+                    <div class="flex items-baseline gap-1">
+                        <span id="kpiHgsida" class="text-2xl font-bold text-blue-400">0.00</span>
+                        <span class="text-sm text-slate-500">€/MWh</span>
+                    </div>
+                </div>
+                <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700 flex flex-col justify-center">
+                    <span class="text-xs text-slate-400 uppercase tracking-wider">Total Gas Production</span>
+                    <div class="flex items-baseline gap-1">
+                        <span id="kpiEcoScada" class="text-2xl font-bold text-orange-400">0.0</span>
+                        <span class="text-sm text-slate-500">MWh</span>
+                    </div>
+                </div>
+                <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700 flex flex-col justify-center">
+                    <span class="text-xs text-slate-400 uppercase tracking-wider">Total Est. Gas Cost</span>
+                    <div class="flex items-baseline gap-1">
+                        <span id="kpiTotalEcoCost" class="text-2xl font-bold text-rose-400">0</span>
+                        <span class="text-sm text-slate-500">€</span>
+                    </div>
+                </div>
+                <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700 flex flex-col justify-center">
+                    <span class="text-xs text-slate-400 uppercase tracking-wider">Fleet Daily Efficiency</span>
+                    <div class="flex items-baseline gap-1">
+                        <span id="kpiFleetEff" class="text-2xl font-bold text-emerald-400">0.0</span>
+                        <span class="text-sm text-slate-500">%</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Economics Table -->
+            <div class="bg-slate-800/40 p-6 rounded-xl border border-slate-700">
+                <h3 class="text-lg font-semibold text-slate-200 mb-1" id="ecoTableTitle">Daily Theoretical Cost per Unit</h3>
+                <p class="text-xs text-slate-400 mb-6">Cost Formula: (HGSIDA / Thermal Efficiency) + CO2 Cost (Fixed at 28 €/MWh)</p>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-slate-300">
+                        <thead class="bg-slate-900/80 text-slate-400 uppercase text-xs">
+                            <tr>
+                                <th class="p-3 rounded-tl-lg">CLASS</th>
+                                <th class="p-3">GAS FACTORY</th>
+                                <th class="p-3 text-right">DAILY PRODUCED (MWh)</th>
+                                <th class="p-3 text-right">EFFICIENCY</th>
+                                <th class="p-3 text-right">GAS COST (€/MWh)</th>
+                                <th class="p-3 text-right rounded-tr-lg">TOTAL COST (€)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="economicsTableBody" class="divide-y divide-slate-700/50">
+                            <!-- Populated by JS -->
+                        </tbody>
+                        <tfoot class="bg-slate-900/50 font-bold border-t-2 border-slate-600">
+                            <tr>
+                                <td colspan="2" class="p-3 text-right text-slate-400 uppercase tracking-wider">DAILY TOTAL</td>
+                                <td id="ecoTableTotalMwh" class="p-3 text-right text-orange-400">0.0</td>
+                                <td id="ecoTableAvgEff" class="p-3 text-right text-emerald-400">0.0%</td>
+                                <td class="p-3 text-right text-slate-500">-</td>
+                                <td id="ecoTableTotalCost" class="p-3 text-right text-rose-400">0 €</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
         </div>
 
         <div id="viewEfficiency" class="space-y-8 hidden">
