@@ -26,45 +26,22 @@ function getCanonicalUnitName(rawName) {
     let clean = String(rawName).trim().toUpperCase();
     clean = clean.replace(/\s*\((ST|GT\d+)\)/gi, '').trim();
 
-    // 1. Komotini Power (Super-Efficient) vs Komotini (Old)
     if (clean === "KOMOTINI_POWER") return "KOMOTINI_POWER";
     if (clean.includes("KOMOTINI") || clean.includes("ΚΟΜΟΤΗΝΗ")) {
-        // Αν είναι η παλιά μονάδα ή γενική αναφορά χωρίς power
         if (clean.includes("POWER")) return "KOMOTINI_POWER";
         return "ΚΟΜΟΤΗΝΗ";
     }
     
-    // 2. Agios Nikolaos 2
     if (clean.includes("AG_NIKOLAOS") || clean.includes("ΑΓ. ΝΙΚΟΛΑΟΣ") || clean.includes("AGIOS NIKOLAOS")) return "AG_NIKOLAOS2";
-    
-    // 3. Protergia / Thessaloniki CCGT -> Protergia CC
     if (clean.includes("PROTERGIA") || clean.includes("THESSALONIKI")) return "PROTERGIA_CC";
-    
-    // 4. Heron CCGT -> ΘΗΣ ΗΡΩΝ
     if (clean.includes("HERON") || clean.includes("ΘΗΣ ΗΡΩΝ") || clean.includes("ΗΡΩΝ")) return "ΘΗΣ ΗΡΩΝ";
-    
-    // 5. Megalopolis 5
     if (clean.includes("MEGALOPOLI") || clean.includes("ΜΕΓΑΛΟΠΟΛΗ")) return "ΜΕΓΑΛΟΠΟΛΗ 5";
-    
-    // 6. Elpedison Thisvi
     if (clean.includes("THISVI") || clean.includes("ΘΗΣΒ")) return "ELPEDISON_THISVI";
-    
-    // 7. Korinthos Power
     if (clean.includes("KORINTHOS") || clean.includes("ΚΟΡΙΝΘΟΣ")) return "KORINTHOS_POWER";
-    
-    // 8. Elpedison Thessaloniki
     if (clean.includes("THESS") && clean.includes("ELPEDISON")) return "ELPEDISON_THESS";
-    
-    // 9. Aliveri 5
     if (clean.includes("ALIVERI") || clean.includes("ΑΛΙΒΕΡΙ")) return "ΑΛΙΒΕΡΙ 5";
-    
-    // 10. Lavrio 5 (Προσοχή: να μπει ΠΡΙΝ το Lavrio 4)
     if (clean.includes("LAVRIO 5") || clean.includes("ΛΑΥΡΙΟ 5") || clean.includes("LAVRIO5")) return "ΛΑΥΡΙΟ 5";
-    
-    // 11. Lavrio 4
     if (clean.includes("LAVRIO 4") || clean.includes("ΛΑΥΡΙΟ 4") || clean.includes("LAVRIO4") || clean.includes("ΛΑΥΡΙΟ") || clean.includes("LAVRIOS")) return "ΛΑΥΡΙΟ 4";
-    
-    // 12. Aluminium
     if (clean.includes("ALOUMINIO") || clean.includes("ΑΛΟΥΜΙΝΙΟ") || clean.includes("ALUM")) return "ΑΛΟΥΜΙΝΙΟ";
 
     return clean;
@@ -92,7 +69,6 @@ function getUnitMetadata(unitName) {
         result.class = rawClass;
         result.eff = parseNum(Object.values(record)[2]);
         
-        // Ιεράρχηση (Merit Order Proxy)
         if (rawClass.includes('Super-Efficient')) result.order = 1;
         else if (rawClass.includes('Standard')) result.order = 2;
         else result.order = 3;
@@ -169,13 +145,11 @@ function updateDashboard() {
         unitMap[uName].scada += val;
     });
 
-    // Ενημέρωση KPIs
     const kpiIspEl = document.getElementById('kpiTotalIsp');
     const kpiScadaEl = document.getElementById('kpiTotalScada');
     if (kpiIspEl) kpiIspEl.innerText = totalIsp.toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1});
     if (kpiScadaEl) kpiScadaEl.innerText = totalScada.toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1});
 
-    // Ταξινόμηση: Πρώτα βάσει Class Order (1: H-Class, 2: F-Class, 3: Peakers), έπειτα βάσει παραγωγής SCADA
     const unitsArray = Object.values(unitMap);
     unitsArray.sort((a, b) => {
         if (a.meta.order !== b.meta.order) return a.meta.order - b.meta.order;
@@ -186,18 +160,35 @@ function updateDashboard() {
     const classLabels = [];
     const dataIsp = [];
     const dataScada = [];
+    const ispColors = [];
+    const scadaColors = [];
 
+    // Χρωματική παλέτα ανά Class (Order 1: Super-Efficient, Order 2: Standard CCGT, Order 3: Peakers)
     unitsArray.forEach(u => {
         labels.push(u.name);
         classLabels.push(u.meta.class);
         dataIsp.push(u.isp);
         dataScada.push(u.scada);
+
+        if (u.meta.order === 1) {
+            // H-Class: Cyan / Teal τόνους
+            ispColors.push('#06b6d4');   // Cyan-500
+            scadaColors.push('#10b981'); // Emerald-500
+        } else if (u.meta.order === 2) {
+            // F-Class: Μπλε / Indigo τόνους
+            ispColors.push('#3b82f6');   // Blue-500
+            scadaColors.push('#6366f1'); // Indigo-500
+        } else {
+            // Peakers: Πορτοκαλί / Amber τόνους
+            ispColors.push('#f59e0b');   // Amber-500
+            scadaColors.push('#f97316'); // Orange-500
+        }
     });
 
-    renderOverviewChart(labels, classLabels, dataIsp, dataScada);
+    renderOverviewChart(labels, classLabels, dataIsp, dataScada, ispColors, scadaColors);
 }
 
-function renderOverviewChart(labels, classLabels, dataIsp, dataScada) {
+function renderOverviewChart(labels, classLabels, dataIsp, dataScada, ispColors, scadaColors) {
     const canvas = document.getElementById('overviewChart');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -213,17 +204,17 @@ function renderOverviewChart(labels, classLabels, dataIsp, dataScada) {
             labels: labels, 
             datasets: [
                 { 
-                    label: 'ISP (MWh)', 
+                    label: 'ISP (Scheduled)', 
                     data: dataIsp, 
-                    backgroundColor: '#3b82f6', 
+                    backgroundColor: ispColors, 
                     borderRadius: 4,
                     barPercentage: 0.85,
                     categoryPercentage: 0.8
                 }, 
                 { 
-                    label: 'SCADA (MWh)', 
+                    label: 'SCADA (Actual)', 
                     data: dataScada, 
-                    backgroundColor: '#fb923c', 
+                    backgroundColor: scadaColors, 
                     borderRadius: 4,
                     barPercentage: 0.85,
                     categoryPercentage: 0.8
