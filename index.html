@@ -46,7 +46,6 @@
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         <span id="btnMethodologyText">Methodology & Assumptions</span>
                     </button>
-                    <!-- Language Toggle (EN is default) -->
                     <div class="flex gap-2 bg-slate-800 border border-slate-700 rounded-lg p-1 text-xs font-bold shadow-sm">
                         <button onclick="setLang('el')" id="btnGr" class="px-2 py-1 rounded text-slate-400 hover:text-white transition">GR</button>
                         <button onclick="setLang('en')" id="btnEn" class="px-2 py-1 rounded bg-blue-600 text-white transition">EN</button>
@@ -55,15 +54,23 @@
             </div>
         </header>
 
-        <!-- TABS NAVIGATION -->
-        <div class="flex space-x-6 border-b border-slate-800 pb-2 overflow-x-auto">
-            <button id="tabBtnOverview" onclick="switchTab('overview')" class="text-blue-400 font-bold border-b-2 border-blue-400 pb-2 px-2 transition whitespace-nowrap">Daily Overview</button>
-            <button id="tabBtnIspScada" onclick="switchTab('ispScada')" class="text-slate-500 hover:text-blue-300 pb-2 px-2 transition whitespace-nowrap">ISP vs SCADA</button>
-            <button id="tabBtnEconomics" onclick="switchTab('economics')" class="text-slate-500 hover:text-blue-300 pb-2 px-2 transition whitespace-nowrap">Economics & Out-of-Merit</button>
-            <button id="tabBtnEfficiency" onclick="switchTab('efficiency')" class="text-slate-500 hover:text-blue-300 pb-2 px-2 transition whitespace-nowrap">Efficiency Classes</button>
+        <!-- TABS & GLOBAL DATE SELECTOR -->
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-800 pb-2 gap-4">
+            <div class="flex space-x-6 overflow-x-auto w-full md:w-auto">
+                <button id="tabBtnOverview" onclick="switchTab('overview')" class="text-blue-400 font-bold border-b-2 border-blue-400 pb-2 px-2 transition whitespace-nowrap">Daily Overview</button>
+                <button id="tabBtnEconomics" onclick="switchTab('economics')" class="text-slate-500 hover:text-blue-300 pb-2 px-2 transition whitespace-nowrap">Daily Economics</button>
+                <button id="tabBtnIspScada" onclick="switchTab('ispScada')" class="text-slate-500 hover:text-blue-300 pb-2 px-2 transition whitespace-nowrap">ISP vs SCADA</button>
+                <button id="tabBtnEfficiency" onclick="switchTab('efficiency')" class="text-slate-500 hover:text-blue-300 pb-2 px-2 transition whitespace-nowrap">Efficiency Classes</button>
+            </div>
+            
+            <!-- Global Date Selector -->
+            <div class="flex items-center gap-2 bg-slate-800/50 p-2 rounded-xl border border-slate-700 shrink-0 shadow-sm">
+                <label class="text-xs text-slate-300 font-medium" id="dateLabel">Date:</label>
+                <select id="dateSelect" onchange="updateDashboard()" class="bg-slate-900 border border-slate-600 text-slate-200 text-sm font-semibold rounded p-1 outline-none focus:border-blue-500 transition cursor-pointer"></select>
+            </div>
         </div>
 
-        <!-- VIEW 1: OVERVIEW (Daily Analytics) -->
+        <!-- VIEW 1: OVERVIEW -->
         <div id="viewOverview" class="space-y-6 block">
             <div class="flex justify-between items-center bg-slate-800/40 p-3 rounded-xl border border-slate-700">
                 <div class="flex gap-4 px-2">
@@ -76,10 +83,6 @@
                         <span class="text-xs text-slate-500 block">TOTAL SCADA (MWh)</span>
                         <span class="text-xl font-bold text-orange-400" id="kpiTotalScada">0.0</span>
                     </div>
-                </div>
-                <div class="flex items-center gap-2">
-                    <label class="text-xs text-slate-300" id="dateLabel">Date:</label>
-                    <select id="dateSelect" onchange="updateDashboard()" class="bg-slate-900 border border-slate-600 text-slate-200 text-sm rounded p-1 outline-none"></select>
                 </div>
             </div>
 
@@ -117,15 +120,11 @@
             </div>
         </div>
 
-        <div id="viewIspScada" class="space-y-8 hidden">
-            <!-- ISP vs SCADA Content -->
-        </div>
-
-        <!-- VIEW 3: ECONOMICS & OUT-OF-MERIT -->
+        <!-- VIEW 2: ECONOMICS (formerly view 3) -->
         <div id="viewEconomics" class="space-y-6 hidden">
             
-            <!-- KPIs Header -->
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- KPIs Header (5 columns) -->
+            <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
                 <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700 flex flex-col justify-center">
                     <span class="text-xs text-slate-400 uppercase tracking-wider">HGSIDA Gas Price</span>
                     <div class="flex items-baseline gap-1">
@@ -134,24 +133,31 @@
                     </div>
                 </div>
                 <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700 flex flex-col justify-center">
-                    <span class="text-xs text-slate-400 uppercase tracking-wider">Total Gas Production</span>
+                    <span class="text-xs text-slate-400 uppercase tracking-wider">Fleet Daily Efficiency</span>
+                    <div class="flex items-baseline gap-1">
+                        <span id="kpiFleetEff" class="text-2xl font-bold text-emerald-400">0.0</span>
+                        <span class="text-sm text-slate-500">%</span>
+                    </div>
+                </div>
+                <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700 flex flex-col justify-center">
+                    <span class="text-[11px] text-slate-400 uppercase tracking-wider">Avg Gas Cost</span>
+                    <div class="flex items-baseline gap-1">
+                        <span id="kpiAvgGasCost" class="text-2xl font-bold text-amber-400">0.00</span>
+                        <span class="text-sm text-slate-500">€/MWh</span>
+                    </div>
+                </div>
+                <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700 flex flex-col justify-center">
+                    <span class="text-[11px] text-slate-400 uppercase tracking-wider">Total Gas Prod.</span>
                     <div class="flex items-baseline gap-1">
                         <span id="kpiEcoScada" class="text-2xl font-bold text-orange-400">0.0</span>
                         <span class="text-sm text-slate-500">MWh</span>
                     </div>
                 </div>
-                <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700 flex flex-col justify-center">
-                    <span class="text-xs text-slate-400 uppercase tracking-wider">Total Est. Gas Cost</span>
+                <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700 flex flex-col justify-center col-span-2 lg:col-span-1">
+                    <span class="text-[11px] text-slate-400 uppercase tracking-wider">Total Est. Cost</span>
                     <div class="flex items-baseline gap-1">
                         <span id="kpiTotalEcoCost" class="text-2xl font-bold text-rose-400">0</span>
                         <span class="text-sm text-slate-500">€</span>
-                    </div>
-                </div>
-                <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700 flex flex-col justify-center">
-                    <span class="text-xs text-slate-400 uppercase tracking-wider">Fleet Daily Efficiency</span>
-                    <div class="flex items-baseline gap-1">
-                        <span id="kpiFleetEff" class="text-2xl font-bold text-emerald-400">0.0</span>
-                        <span class="text-sm text-slate-500">%</span>
                     </div>
                 </div>
             </div>
@@ -178,10 +184,10 @@
                         </tbody>
                         <tfoot class="bg-slate-900/50 font-bold border-t-2 border-slate-600">
                             <tr>
-                                <td colspan="2" class="p-3 text-right text-slate-400 uppercase tracking-wider">DAILY TOTAL</td>
+                                <td colspan="2" class="p-3 text-right text-slate-400 uppercase tracking-wider">DAILY TOTAL / AVG</td>
                                 <td id="ecoTableTotalMwh" class="p-3 text-right text-orange-400">0.0</td>
                                 <td id="ecoTableAvgEff" class="p-3 text-right text-emerald-400">0.0%</td>
-                                <td class="p-3 text-right text-slate-500">-</td>
+                                <td id="ecoTableAvgGasCost" class="p-3 text-right text-amber-400">0.00</td>
                                 <td id="ecoTableTotalCost" class="p-3 text-right text-rose-400">0 €</td>
                             </tr>
                         </tfoot>
@@ -190,6 +196,12 @@
             </div>
         </div>
 
+        <!-- VIEW 3: ISP vs SCADA -->
+        <div id="viewIspScada" class="space-y-8 hidden">
+            <!-- ISP vs SCADA Content -->
+        </div>
+
+        <!-- VIEW 4: EFFICIENCY -->
         <div id="viewEfficiency" class="space-y-8 hidden">
             <!-- Efficiency Content -->
         </div>
@@ -224,7 +236,7 @@
         </div>
     </div>
 
-    <!-- Script για το Modal -->
+    <!-- Modal Script -->
     <script>
         function openMethodologyModal() {
             const modal = document.getElementById('methodologyModal');
