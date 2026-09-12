@@ -1,12 +1,28 @@
 // ==========================================
 // CONFIGURATION & CONSTANTS
 // ==========================================
-const CO2_COST_PER_MWH = 28.0; // Σταθερό κόστος ρύπων CO2 (€/MWh)
+const CO2_COST_PER_MWH = 28.0; 
 
 // ==========================================
 // GLOBAL CHART INSTANCES & STATE
 // ==========================================
 let overviewChartInst = null;
+let monthlyChartInst = null;
+let selectorsInitialized = false;
+
+// Έξυπνη επιδιόρθωση του λεξικού i18n του data.js 
+// χωρίς να χρειάζεται να πειράξεις το αρχείο data.js
+document.addEventListener("DOMContentLoaded", () => {
+    setTimeout(() => {
+        if (typeof i18n !== 'undefined') {
+            if (i18n.en) i18n.en.tabIspScada = "Monthly Analytics";
+            if (i18n.el) i18n.el.tabIspScada = "Μηνιαία Ανάλυση";
+            if (typeof setLang === 'function' && typeof currentLang !== 'undefined') {
+                setLang(currentLang);
+            }
+        }
+    }, 500); // Περιμένουμε μισό δευτερόλεπτο να φορτώσει το data.js
+});
 
 // ==========================================
 // HELPERS
@@ -27,6 +43,39 @@ function parseNum(val) {
 
 function formatEuro(amount) {
     return amount.toLocaleString('el-GR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+// Συγχρονισμός επιλογών ημερομηνίας ανάμεσα στα Tabs 1 & 2
+function syncDate(sourceId, targetId) {
+    const source = document.getElementById(sourceId);
+    const target = document.getElementById(targetId);
+    if (source && target) {
+        target.value = source.value;
+    }
+}
+
+// Αρχικοποίηση των Dropdowns για View 2 & View 3
+function initExtraSelectors() {
+    if (selectorsInitialized) return;
+    
+    const mainDs = document.getElementById('dateSelect');
+    const ecoDs = document.getElementById('dateSelectEco');
+    const monthDs = document.getElementById('monthSelect');
+    
+    if (!mainDs || mainDs.options.length === 0) return; 
+    
+    if (ecoDs && ecoDs.options.length === 0) {
+        ecoDs.innerHTML = mainDs.innerHTML;
+        ecoDs.value = mainDs.value;
+    }
+    
+    if (monthDs && monthDs.options.length === 0) {
+        const allDates = Array.from(mainDs.options).map(opt => opt.value);
+        const months = [...new Set(allDates.map(d => d.substring(0, 7)))];
+        monthDs.innerHTML = months.map(m => `<option value="${m}">${m}</option>`).join('');
+    }
+    
+    selectorsInitialized = true;
 }
 
 // Δημιουργία Seamless Diagonal Pattern για το SCADA
@@ -87,18 +136,11 @@ function getCanonicalUnitName(rawName) {
     return clean;
 }
 
-// Διαβάζει το Class από το Thermal Efficiency data
 function getUnitMetadata(unitName) {
-    let result = { 
-        class: 'Older Generation & Peakers', 
-        eff: 0.50, 
-        order: 3 
-    };
-    
+    let result = { class: 'Older Generation & Peakers', eff: 0.50, order: 3 };
     if (!rawData || !rawData.efficiency) return result;
 
     const canonical = getCanonicalUnitName(unitName);
-
     const record = rawData.efficiency.find(r => {
         const sheetUnit = String(Object.values(r)[1]).trim().toUpperCase();
         return sheetUnit === canonical || sheetUnit === unitName.toUpperCase();
@@ -108,7 +150,6 @@ function getUnitMetadata(unitName) {
         const rawClass = Object.values(record)[0];
         result.class = rawClass;
         result.eff = parseNum(Object.values(record)[2]);
-        
         if (rawClass.includes('Super-Efficient')) result.order = 1;
         else if (rawClass.includes('Standard')) result.order = 2;
         else result.order = 3;
@@ -127,7 +168,6 @@ function getUnitMetadata(unitName) {
 // TAB SWITCHING CONTROLLER
 // ==========================================
 function switchTab(tabId) {
-    // Η νέα σειρά των tabs
     const tabs = ['overview', 'economics', 'ispScada', 'efficiency'];
     tabs.forEach(t => {
         const btn = document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1));
@@ -144,19 +184,21 @@ function switchTab(tabId) {
 
     if (tabId === 'overview') updateOverviewTab();
     if (tabId === 'economics') updateEconomicsTab();
+    if (tabId === 'ispScada') updateMonthlyTab(); // Τώρα το ispScada οδηγεί στο Monthly
 }
 
 // ==========================================
-// MASTER UPDATE TRIGGERS
+// MASTER UPDATE TRIGGER
 // ==========================================
 function updateDashboard() {
-    // Επειδή πλέον το ημερολόγιο είναι global, ενημερώνουμε και τα 2 ενεργά views αμέσως.
+    initExtraSelectors();
     updateOverviewTab();
     updateEconomicsTab();
+    updateMonthlyTab();
 }
 
 // ==========================================
-// TAB 1: DAILY OVERVIEW (ISP vs SCADA)
+// TAB 1: DAILY OVERVIEW
 // ==========================================
 function updateOverviewTab() {
     const dateSelect = document.getElementById('dateSelect');
@@ -215,9 +257,7 @@ function updateOverviewTab() {
     const scadaColors = [];
 
     const colorMap = {
-        1: '#06b6d4', // Cyan
-        2: '#3b82f6', // Blue
-        3: '#f97316'  // Orange
+        1: '#06b6d4', 2: '#3b82f6', 3: '#f97316'
     };
 
     unitsArray.forEach(u => {
@@ -280,9 +320,7 @@ function renderOverviewChart(labels, classLabels, dataIsp, dataScada, ispColors,
                 legend: { display: false }, 
                 tooltip: {
                     callbacks: {
-                        beforeTitle: function(context) {
-                            return classLabels[context[0].dataIndex];
-                        },
+                        beforeTitle: function(context) { return classLabels[context[0].dataIndex]; },
                         label: function(context) {
                             let label = context.dataset.label || '';
                             if (label) label += ': ';
@@ -293,17 +331,8 @@ function renderOverviewChart(labels, classLabels, dataIsp, dataScada, ispColors,
                 }
             }, 
             scales: { 
-                x: { 
-                    grid: { display: false },
-                    ticks: {
-                        maxRotation: 45,
-                        minRotation: 45
-                    }
-                }, 
-                y: { 
-                    grid: { color: '#334155' },
-                    title: { display: true, text: 'MWh' }
-                } 
+                x: { grid: { display: false }, ticks: { maxRotation: 45, minRotation: 45 } }, 
+                y: { grid: { color: '#334155' }, title: { display: true, text: 'MWh' } } 
             } 
         } 
     });
@@ -313,7 +342,7 @@ function renderOverviewChart(labels, classLabels, dataIsp, dataScada, ispColors,
 // TAB 2: DAILY ECONOMICS
 // ==========================================
 function updateEconomicsTab() {
-    const dateSelect = document.getElementById('dateSelect');
+    const dateSelect = document.getElementById('dateSelectEco');
     if (!dateSelect || !rawData || !rawData.scada) return;
     
     const selectedDate = dateSelect.value;
@@ -322,9 +351,7 @@ function updateEconomicsTab() {
     let hgsida = 0;
     if (rawData.henex) {
         const henexDay = rawData.henex.find(d => parseDate(Object.values(d)[0]) === selectedDate);
-        if (henexDay) {
-            hgsida = parseNum(Object.values(henexDay)[1]); 
-        }
+        if (henexDay) hgsida = parseNum(Object.values(henexDay)[1]); 
     }
 
     const scadaDay = rawData.scada.filter(d => parseDate(Object.values(d)[0]) === selectedDate);
@@ -356,7 +383,6 @@ function updateEconomicsTab() {
 
     unitsArray.forEach(u => {
         totalMwh += u.scada;
-        
         const efficiencyRatio = u.meta.eff; 
         const gasCostPerMwh = hgsida > 0 ? (hgsida / efficiencyRatio) + CO2_COST_PER_MWH : 0;
         const unitTotalCost = u.scada * gasCostPerMwh;
@@ -385,16 +411,148 @@ function updateEconomicsTab() {
     const fleetEfficiency = totalTheoreticalFuel > 0 ? (totalMwh / totalTheoreticalFuel) * 100 : 0;
     const avgGasCost = totalMwh > 0 ? (totalCostFleet / totalMwh) : 0;
 
-    // Ενημέρωση Footer Table
     document.getElementById('ecoTableTotalMwh').innerText = totalMwh.toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1});
     document.getElementById('ecoTableAvgEff').innerText = fleetEfficiency.toFixed(2) + '%';
     document.getElementById('ecoTableAvgGasCost').innerText = avgGasCost > 0 ? avgGasCost.toFixed(2) : '-';
     document.getElementById('ecoTableTotalCost').innerText = formatEuro(totalCostFleet);
 
-    // Ενημέρωση Top KPIs (Κάρτες)
     document.getElementById('kpiHgsida').innerText = hgsida > 0 ? hgsida.toFixed(2) : '-';
     document.getElementById('kpiEcoScada').innerText = totalMwh.toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1});
     document.getElementById('kpiAvgGasCost').innerText = avgGasCost > 0 ? avgGasCost.toFixed(2) : '-';
     document.getElementById('kpiTotalEcoCost').innerText = totalCostFleet > 0 ? formatEuro(totalCostFleet) : '-';
     document.getElementById('kpiFleetEff').innerText = fleetEfficiency.toFixed(2);
+}
+
+// ==========================================
+// TAB 3: MONTHLY ANALYTICS
+// ==========================================
+function updateMonthlyTab() {
+    const monthSelect = document.getElementById('monthSelect');
+    if (!monthSelect || !rawData || !rawData.scada) return;
+    
+    const selectedMonth = monthSelect.value; // π.χ. "2026-08"
+    if (!selectedMonth) return;
+
+    // Εύρεση όλων των μοναδικών ημερομηνιών του επιλεγμένου μήνα
+    const allDatesInMonth = [...new Set([
+        ...rawData.henex.map(d => parseDate(Object.values(d)[0])),
+        ...rawData.scada.map(d => parseDate(Object.values(d)[0]))
+    ])].filter(d => d.startsWith(selectedMonth)).sort();
+
+    const labels = [];
+    const hgsidaData = [];
+    const avgCostData = [];
+
+    allDatesInMonth.forEach(day => {
+        // Παίρνουμε μόνο τον αριθμό της ημέρας (π.χ. "15" από "2026-08-15") για καθαρότητα στον άξονα Χ
+        const dayNumber = day.split('-')[2];
+        labels.push(dayNumber);
+
+        // 1. Υπολογισμός HGSIDA
+        let hgsida = 0;
+        const henexDay = rawData.henex.find(d => parseDate(Object.values(d)[0]) === day);
+        if (henexDay) hgsida = parseNum(Object.values(henexDay)[1]);
+        hgsidaData.push(hgsida);
+
+        // 2. Υπολογισμός Fleet Average Gas Cost
+        const scadaDay = rawData.scada.filter(d => parseDate(Object.values(d)[0]) === day);
+        let dailyTotalMwh = 0;
+        let dailyTotalCost = 0;
+
+        scadaDay.forEach(d => {
+            let uName = String(Object.values(d)[1].trim());
+            const val = parseNum(Object.values(d)[2]);
+            if (uName === "TOTAL GAS UNITS" || val <= 0) return;
+
+            uName = getCanonicalUnitName(uName);
+            const eff = getUnitMetadata(uName).eff;
+            const unitCostPerMwh = (hgsida / eff) + CO2_COST_PER_MWH;
+
+            dailyTotalMwh += val;
+            dailyTotalCost += (val * unitCostPerMwh);
+        });
+
+        const dailyAvgCost = dailyTotalMwh > 0 ? (dailyTotalCost / dailyTotalMwh) : 0;
+        avgCostData.push(dailyAvgCost);
+    });
+
+    renderMonthlyChart(labels, hgsidaData, avgCostData);
+}
+
+function renderMonthlyChart(labels, hgsidaData, avgCostData) {
+    const canvas = document.getElementById('monthlyChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    if (monthlyChartInst) monthlyChartInst.destroy();
+    
+    Chart.defaults.color = '#94a3b8';
+    Chart.defaults.font.family = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+    monthlyChartInst = new Chart(ctx, { 
+        type: 'line', 
+        data: { 
+            labels: labels, 
+            datasets: [
+                { 
+                    label: 'HGSIDA Price (€/MWh)', 
+                    data: hgsidaData, 
+                    borderColor: '#3b82f6', // Blue
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    pointRadius: 3,
+                    pointBackgroundColor: '#3b82f6'
+                }, 
+                { 
+                    label: 'Fleet Avg Gas Cost (€/MWh)', 
+                    data: avgCostData, 
+                    borderColor: '#f59e0b', // Amber
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    pointRadius: 3,
+                    pointBackgroundColor: '#f59e0b'
+                }
+            ] 
+        }, 
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            plugins: { 
+                legend: { 
+                    display: true,
+                    position: 'top',
+                    labels: { boxWidth: 15, font: { size: 12 } }
+                }, 
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) label += ': ';
+                            label += context.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' €';
+                            return label;
+                        }
+                    }
+                }
+            }, 
+            scales: { 
+                x: { 
+                    grid: { color: '#1e293b' },
+                    title: { display: true, text: 'Day of Month', color: '#64748b' }
+                }, 
+                y: { 
+                    grid: { color: '#334155' },
+                    title: { display: true, text: '€ / MWh' }
+                } 
+            },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false
+            }
+        } 
+    });
 }
