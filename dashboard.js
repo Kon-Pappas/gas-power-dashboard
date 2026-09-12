@@ -1,4 +1,9 @@
 // ==========================================
+// CONFIGURATION & CONSTANTS
+// ==========================================
+const CO2_COST_PER_MWH = 28.0; // Σταθερό κόστος ρύπων CO2 (€/MWh)
+
+// ==========================================
 // GLOBAL CHART INSTANCES & STATE
 // ==========================================
 let overviewChartInst = null;
@@ -20,6 +25,10 @@ function parseNum(val) {
     return isNaN(n) ? 0 : n;
 }
 
+function formatEuro(amount) {
+    return amount.toLocaleString('el-GR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
 // Δημιουργία Seamless Diagonal Pattern για το SCADA
 function createDiagonalPattern(colorHex) {
     const canvas = document.createElement('canvas');
@@ -27,15 +36,12 @@ function createDiagonalPattern(colorHex) {
     canvas.height = 8;
     const ctx = canvas.getContext('2d');
     
-    // Γέμισμα με το βασικό χρώμα (solid)
     ctx.fillStyle = colorHex;
     ctx.fillRect(0, 0, 8, 8);
     
-    // Σχεδίαση ημιδιαφανών λευκών διαγώνιων γραμμών
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
     ctx.lineWidth = 2;
     
-    // 3 γραμμές για να επιτευχθεί τέλειο seamless tiling στις άκρες του pattern
     ctx.beginPath();
     ctx.moveTo(0, 8);
     ctx.lineTo(8, 0);
@@ -108,6 +114,7 @@ function getUnitMetadata(unitName) {
         else result.order = 3;
     }
     
+    // Προσαρμογή του label βάσει γλώσσας
     if (result.order === 3) {
         result.class = (typeof currentLang !== 'undefined' && currentLang === 'el') 
             ? 'Παλαιότερη Γενιά & Peakers' 
@@ -135,13 +142,26 @@ function switchTab(tabId) {
         }
     });
 
-    if (tabId === 'overview' && typeof updateDashboard === "function") updateDashboard();
+    if (tabId === 'overview') updateDashboard();
+    if (tabId === 'economics') updateEconomicsTab();
 }
 
 // ==========================================
-// TAB: DAILY OVERVIEW (ISP vs SCADA)
+// MASTER UPDATE TRIGGERS
 // ==========================================
 function updateDashboard() {
+    updateOverviewTab();
+    
+    // Αν το tab economics είναι ανοιχτό, κάνε το update και αυτό
+    if (!document.getElementById('viewEconomics').classList.contains('hidden')) {
+        updateEconomicsTab();
+    }
+}
+
+// ==========================================
+// TAB 1: DAILY OVERVIEW (ISP vs SCADA)
+// ==========================================
+function updateOverviewTab() {
     const dateSelect = document.getElementById('dateSelect');
     if (!dateSelect || !rawData || !rawData.isp) return;
     
@@ -198,9 +218,9 @@ function updateDashboard() {
     const scadaColors = [];
 
     const colorMap = {
-        1: '#06b6d4', // Cyan (H-Class)
-        2: '#3b82f6', // Blue (F-Class)
-        3: '#f97316'  // Orange (Peakers)
+        1: '#06b6d4', // Cyan
+        2: '#3b82f6', // Blue
+        3: '#f97316'  // Orange
     };
 
     unitsArray.forEach(u => {
@@ -209,11 +229,8 @@ function updateDashboard() {
         dataIsp.push(u.isp);
         dataScada.push(u.scada);
 
-        let baseColor = colorMap[u.meta.order] || '#64748b'; // Fallback slate
-
-        // ISP = Solid Color
+        let baseColor = colorMap[u.meta.order] || '#64748b';
         ispColors.push(baseColor);
-        // SCADA = Striped Pattern with the same base color
         scadaColors.push(createDiagonalPattern(baseColor));
     });
 
@@ -252,7 +269,7 @@ function renderOverviewChart(labels, classLabels, dataIsp, dataScada, ispColors,
                     data: dataScada, 
                     backgroundColor: scadaColors, 
                     borderRadius: 4,
-                    borderWidth: 1, // Ελαφρύ περίγραμμα για να "δένει" το pattern
+                    borderWidth: 1, 
                     borderColor: ispColors,
                     barPercentage: 0.85,
                     categoryPercentage: 0.8
@@ -263,7 +280,7 @@ function renderOverviewChart(labels, classLabels, dataIsp, dataScada, ispColors,
             responsive: true, 
             maintainAspectRatio: false, 
             plugins: { 
-                legend: { display: false }, // Κρύβουμε το default επειδή έχουμε φτιάξει το δικό μας custom HTML legend!
+                legend: { display: false }, 
                 tooltip: {
                     callbacks: {
                         beforeTitle: function(context) {
@@ -293,4 +310,99 @@ function renderOverviewChart(labels, classLabels, dataIsp, dataScada, ispColors,
             } 
         } 
     });
+}
+
+// ==========================================
+// TAB 3: ECONOMICS & OUT-OF-MERIT
+// ==========================================
+function updateEconomicsTab() {
+    const dateSelect = document.getElementById('dateSelect');
+    if (!dateSelect || !rawData || !rawData.scada) return;
+    
+    const selectedDate = dateSelect.value;
+    if (!selectedDate) return;
+
+    // Εύρεση του HGSIDA από το Henex
+    let hgsida = 0;
+    if (rawData.henex) {
+        const henexDay = rawData.henex.find(d => parseDate(Object.values(d)[0]) === selectedDate);
+        if (henexDay) {
+            hgsida = parseNum(Object.values(henexDay)[1]); // Υποθέτουμε το HGSIDA είναι η 2η στήλη (index 1)
+        }
+    }
+
+    const scadaDay = rawData.scada.filter(d => parseDate(Object.values(d)[0]) === selectedDate);
+    
+    const ecoMap = {};
+    scadaDay.forEach(d => {
+        let uName = String(Object.values(d)[1].trim());
+        const val = parseNum(Object.values(d)[2]);
+        if (uName === "TOTAL GAS UNITS" || val <= 0) return; // Αγνοούμε τα 0 και το σύνολο
+
+        uName = getCanonicalUnitName(uName);
+        if (!ecoMap[uName]) ecoMap[uName] = { name: uName, scada: 0, meta: getUnitMetadata(uName) };
+        ecoMap[uName].scada += val;
+    });
+
+    const unitsArray = Object.values(ecoMap);
+    unitsArray.sort((a, b) => {
+        if (a.meta.order !== b.meta.order) return a.meta.order - b.meta.order;
+        return b.scada - a.scada;
+    });
+
+    let totalMwh = 0;
+    let totalTheoreticalFuel = 0;
+    let totalCostFleet = 0;
+
+    const tbody = document.getElementById('economicsTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    unitsArray.forEach(u => {
+        totalMwh += u.scada;
+        
+        // Μαθηματικά Κόστους
+        // 1. Gas Cost (€/MWh) = (HGSIDA / Efficiency) + CO2 Cost
+        const efficiencyRatio = u.meta.eff; 
+        const gasCostPerMwh = hgsida > 0 ? (hgsida / efficiencyRatio) + CO2_COST_PER_MWH : 0;
+        
+        // 2. Total Cost
+        const unitTotalCost = u.scada * gasCostPerMwh;
+        totalCostFleet += unitTotalCost;
+
+        // 3. Καύσιμο για τον Weighted Average Efficiency
+        totalTheoreticalFuel += (u.scada / efficiencyRatio);
+
+        // Χρώματα γραμμής ανά Class (αριστερό border)
+        let borderClass = "border-l-4 border-slate-700";
+        if (u.meta.order === 1) borderClass = "border-l-4 border-[#06b6d4]"; // Cyan
+        if (u.meta.order === 2) borderClass = "border-l-4 border-[#3b82f6]"; // Blue
+        if (u.meta.order === 3) borderClass = "border-l-4 border-[#f97316]"; // Orange
+
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-700/50 transition-colors group";
+        tr.innerHTML = `
+            <td class="p-3 text-xs text-slate-400 ${borderClass}">${u.meta.class}</td>
+            <td class="p-3 font-bold text-slate-300 group-hover:text-white transition-colors">${u.name}</td>
+            <td class="p-3 text-right font-mono">${u.scada.toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1})}</td>
+            <td class="p-3 text-right text-emerald-400/90">${(efficiencyRatio * 100).toFixed(1)}%</td>
+            <td class="p-3 text-right font-mono">${gasCostPerMwh > 0 ? gasCostPerMwh.toFixed(2) : '-'}</td>
+            <td class="p-3 text-right font-semibold text-slate-300">${gasCostPerMwh > 0 ? formatEuro(unitTotalCost) : '-'}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    // Υπολογισμός Weighted Average Efficiency
+    const fleetEfficiency = totalTheoreticalFuel > 0 ? (totalMwh / totalTheoreticalFuel) * 100 : 0;
+
+    // Ενημέρωση Footer Table
+    document.getElementById('ecoTableTotalMwh').innerText = totalMwh.toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1});
+    document.getElementById('ecoTableAvgEff').innerText = fleetEfficiency.toFixed(2) + '%';
+    document.getElementById('ecoTableTotalCost').innerText = formatEuro(totalCostFleet);
+
+    // Ενημέρωση Top KPIs
+    document.getElementById('kpiHgsida').innerText = hgsida > 0 ? hgsida.toFixed(2) : '-';
+    document.getElementById('kpiEcoScada').innerText = totalMwh.toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1});
+    document.getElementById('kpiTotalEcoCost').innerText = totalCostFleet > 0 ? formatEuro(totalCostFleet) : '-';
+    document.getElementById('kpiFleetEff').innerText = fleetEfficiency.toFixed(2);
 }
