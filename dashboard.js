@@ -20,7 +20,41 @@ function parseNum(val) {
     return isNaN(n) ? 0 : n;
 }
 
-// ΕΞΥΠΝΗ ΑΝΤΙΣΤΟΙΧΙΣΗ (Mapping) ΟΝΟΜΑΤΩΝ ΜΟΝΑΔΩΝ ΣΕ CANONICAL NAMES
+// Δημιουργία Seamless Diagonal Pattern για το SCADA
+function createDiagonalPattern(colorHex) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 8;
+    canvas.height = 8;
+    const ctx = canvas.getContext('2d');
+    
+    // Γέμισμα με το βασικό χρώμα (solid)
+    ctx.fillStyle = colorHex;
+    ctx.fillRect(0, 0, 8, 8);
+    
+    // Σχεδίαση ημιδιαφανών λευκών διαγώνιων γραμμών
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+    ctx.lineWidth = 2;
+    
+    // 3 γραμμές για να επιτευχθεί τέλειο seamless tiling στις άκρες του pattern
+    ctx.beginPath();
+    ctx.moveTo(0, 8);
+    ctx.lineTo(8, 0);
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.moveTo(-4, 4);
+    ctx.lineTo(4, -4);
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.moveTo(4, 12);
+    ctx.lineTo(12, 4);
+    ctx.stroke();
+    
+    return ctx.createPattern(canvas, 'repeat');
+}
+
+// ΕΞΥΠΝΗ ΑΝΤΙΣΤΟΙΧΙΣΗ (Mapping) ΟΝΟΜΑΤΩΝ ΜΟΝΑΔΩΝ
 function getCanonicalUnitName(rawName) {
     if (!rawName) return "UNKNOWN";
     let clean = String(rawName).trim().toUpperCase();
@@ -47,7 +81,7 @@ function getCanonicalUnitName(rawName) {
     return clean;
 }
 
-// Διαβάζει το Class από το Thermal Efficiency data βάσει canonical name
+// Διαβάζει το Class από το Thermal Efficiency data
 function getUnitMetadata(unitName) {
     let result = { 
         class: 'Older Generation & Peakers', 
@@ -163,26 +197,24 @@ function updateDashboard() {
     const ispColors = [];
     const scadaColors = [];
 
-    // Χρωματικός διαχωρισμός βάσει Efficiency Class (Order 1, 2, 3)
+    const colorMap = {
+        1: '#06b6d4', // Cyan (H-Class)
+        2: '#3b82f6', // Blue (F-Class)
+        3: '#f97316'  // Orange (Peakers)
+    };
+
     unitsArray.forEach(u => {
         labels.push(u.name);
         classLabels.push(u.meta.class);
         dataIsp.push(u.isp);
         dataScada.push(u.scada);
 
-        if (u.meta.order === 1) {
-            // Super-Efficient / H-Class (Cyan / Teal)
-            ispColors.push('rgba(6, 182, 212, 0.85)');
-            scadaColors.push('rgba(6, 182, 212, 1)');
-        } else if (u.meta.order === 2) {
-            // Standard CCGT / F-Class (Blue / Indigo)
-            ispColors.push('rgba(59, 130, 246, 0.85)');
-            scadaColors.push('rgba(59, 130, 246, 1)');
-        } else {
-            // Older Generation & Peakers (Amber / Orange)
-            ispColors.push('rgba(245, 158, 11, 0.85)');
-            scadaColors.push('rgba(245, 158, 11, 1)');
-        }
+        let baseColor = colorMap[u.meta.order] || '#64748b'; // Fallback slate
+
+        // ISP = Solid Color
+        ispColors.push(baseColor);
+        // SCADA = Striped Pattern with the same base color
+        scadaColors.push(createDiagonalPattern(baseColor));
     });
 
     renderOverviewChart(labels, classLabels, dataIsp, dataScada, ispColors, scadaColors);
@@ -220,6 +252,8 @@ function renderOverviewChart(labels, classLabels, dataIsp, dataScada, ispColors,
                     data: dataScada, 
                     backgroundColor: scadaColors, 
                     borderRadius: 4,
+                    borderWidth: 1, // Ελαφρύ περίγραμμα για να "δένει" το pattern
+                    borderColor: ispColors,
                     barPercentage: 0.85,
                     categoryPercentage: 0.8
                 }
@@ -229,14 +263,7 @@ function renderOverviewChart(labels, classLabels, dataIsp, dataScada, ispColors,
             responsive: true, 
             maintainAspectRatio: false, 
             plugins: { 
-                legend: { 
-                    display: true,
-                    position: 'top',
-                    labels: {
-                        boxWidth: 12,
-                        font: { size: 11 }
-                    }
-                },
+                legend: { display: false }, // Κρύβουμε το default επειδή έχουμε φτιάξει το δικό μας custom HTML legend!
                 tooltip: {
                     callbacks: {
                         beforeTitle: function(context) {
