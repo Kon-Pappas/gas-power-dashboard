@@ -134,7 +134,7 @@ function updateDashboard() {
     });
 
     scadaDay.forEach(d => {
-        let uName = String(Object.values(d)[1]).trim();
+        let uName = String(Object.values(d)[1].trim());
         const val = parseNum(Object.values(d)[2]);
         if (uName === "TOTAL GAS UNITS") {
             totalScada = val;
@@ -163,7 +163,7 @@ function updateDashboard() {
     const ispColors = [];
     const scadaColors = [];
 
-    // Χρωματική παλέτα ανά Class (Order 1: Super-Efficient, Order 2: Standard CCGT, Order 3: Peakers)
+    // Χρωματικός διαχωρισμός βάσει Efficiency Class (Order 1, 2, 3)
     unitsArray.forEach(u => {
         labels.push(u.name);
         classLabels.push(u.meta.class);
@@ -171,17 +171,17 @@ function updateDashboard() {
         dataScada.push(u.scada);
 
         if (u.meta.order === 1) {
-            // H-Class: Cyan / Teal τόνους
-            ispColors.push('#06b6d4');   // Cyan-500
-            scadaColors.push('#10b981'); // Emerald-500
+            // Super-Efficient / H-Class (Cyan / Teal)
+            ispColors.push('rgba(6, 182, 212, 0.85)');
+            scadaColors.push('rgba(6, 182, 212, 1)');
         } else if (u.meta.order === 2) {
-            // F-Class: Μπλε / Indigo τόνους
-            ispColors.push('#3b82f6');   // Blue-500
-            scadaColors.push('#6366f1'); // Indigo-500
+            // Standard CCGT / F-Class (Blue / Indigo)
+            ispColors.push('rgba(59, 130, 246, 0.85)');
+            scadaColors.push('rgba(59, 130, 246, 1)');
         } else {
-            // Peakers: Πορτοκαλί / Amber τόνους
-            ispColors.push('#f59e0b');   // Amber-500
-            scadaColors.push('#f97316'); // Orange-500
+            // Older Generation & Peakers (Amber / Orange)
+            ispColors.push('rgba(245, 158, 11, 0.85)');
+            scadaColors.push('rgba(245, 158, 11, 1)');
         }
     });
 
@@ -198,13 +198,17 @@ function renderOverviewChart(labels, classLabels, dataIsp, dataScada, ispColors,
     Chart.defaults.color = '#94a3b8';
     Chart.defaults.font.family = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 
+    const lang = (typeof currentLang !== 'undefined') ? currentLang : 'en';
+    const labelIsp = (lang === 'el') ? 'Πρόγραμμα (ISP)' : 'Scheduled (ISP)';
+    const labelScada = (lang === 'el') ? 'Πραγματικό (SCADA)' : 'Actual (SCADA)';
+
     overviewChartInst = new Chart(ctx, { 
         type: 'bar', 
         data: { 
             labels: labels, 
             datasets: [
                 { 
-                    label: 'ISP (Scheduled)', 
+                    label: labelIsp, 
                     data: dataIsp, 
                     backgroundColor: ispColors, 
                     borderRadius: 4,
@@ -212,7 +216,7 @@ function renderOverviewChart(labels, classLabels, dataIsp, dataScada, ispColors,
                     categoryPercentage: 0.8
                 }, 
                 { 
-                    label: 'SCADA (Actual)', 
+                    label: labelScada, 
                     data: dataScada, 
                     backgroundColor: scadaColors, 
                     borderRadius: 4,
@@ -225,7 +229,14 @@ function renderOverviewChart(labels, classLabels, dataIsp, dataScada, ispColors,
             responsive: true, 
             maintainAspectRatio: false, 
             plugins: { 
-                legend: { display: false },
+                legend: { 
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        boxWidth: 12,
+                        font: { size: 11 }
+                    }
+                },
                 tooltip: {
                     callbacks: {
                         beforeTitle: function(context) {
