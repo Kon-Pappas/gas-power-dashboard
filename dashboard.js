@@ -596,7 +596,7 @@ function updateSurplusTab() {
     const selectedMonth = monthSelect.value;
     if (!selectedMonth) return;
 
-    // 1. Δομή για τα Constraints ανά ημέρα και κανονικοποιημένη μονάδα
+    // 1. Δομή για τα Constraints ανά ημέρα και μονάδα
     let constraintsByDay = {};
     
     rawData.daily_gas_constraints.forEach(c => {
@@ -605,22 +605,29 @@ function updateSurplusTab() {
         if (!d.startsWith(selectedMonth)) return;
         
         let unit = getCanonicalUnitName(vals[1]); 
-        let hFrom = getHourNumber(vals[2]);       
-        let hTo = getHourNumber(vals[3]);         
         
-        if (hFrom !== -1 && hTo !== -1) {
+        let hFromParts = String(vals[2] || "").trim().split(':');
+        let hToParts = String(vals[3] || "").trim().split(':');
+        
+        let hFromInt = parseInt(hFromParts[0], 10) || 0;
+        let hToInt = parseInt(hToParts[0], 10) || 0;
+        
+        // --- ΔΙΟΡΘΩΣΗ: Σωστή αντιστοίχιση ωρών (π.χ. 9:59 - 13:59 -> Ώρες 10, 11, 12, 13) ---
+        let hStart = hFromInt + 1; // 9:59 -> 10η ώρα
+        let hEnd = hToInt;         // 13:59 -> 13η ώρα
+        
+        if (hStart <= hEnd) {
             if (!constraintsByDay[d]) constraintsByDay[d] = {};
             if (!constraintsByDay[d][unit]) {
-                constraintsByDay[d][unit] = { hStart: Math.min(hFrom, hTo), hEnd: Math.max(hFrom, hTo) - 1 };
+                constraintsByDay[d][unit] = { hStart: hStart, hEnd: hEnd };
             } else {
-                // Αν υπάρχουν πολλαπλές γραμμές για την ίδια μονάδα, διευρύνουμε το παράθυρο αν χρειαστεί
-                constraintsByDay[d][unit].hStart = Math.min(constraintsByDay[d][unit].hStart, Math.min(hFrom, hTo));
-                constraintsByDay[d][unit].hEnd = Math.max(constraintsByDay[d][unit].hEnd, Math.max(hFrom, hTo) - 1);
+                constraintsByDay[d][unit].hStart = Math.min(constraintsByDay[d][unit].hStart, hStart);
+                constraintsByDay[d][unit].hEnd = Math.max(constraintsByDay[d][unit].hEnd, hEnd);
             }
         }
     });
 
-    // 2. Υπολογισμός MWh (Generic Constraints) βάσει του SCADA Hourly (χωρίς διπλοεγγραφές ανά μονάδα)
+    // 2. Υπολογισμός MWh (Generic Constraints) βάσει του SCADA Hourly
     let dailyConstrainedMwh = {};
     
     rawData.scadaHourly.forEach(row => {
@@ -634,16 +641,15 @@ function updateSurplusTab() {
         
         let cUnit = getCanonicalUnitName(rawUnit);
         
-        // Αν η μονάδα αυτή είχε constraint τη συγκεκριμένη μέρα
         if (constraintsByDay[d][cUnit]) {
             if (!dailyConstrainedMwh[d]) dailyConstrainedMwh[d] = 0;
             
             let window = constraintsByDay[d][cUnit];
             
-            // Αθροίζουμε την παραγωγή ΜΟΝΟ 1 φορά για το εύρος ωρών της μονάδας
+            // Άθροισμα των στηλών SCADA για τις σωστές ώρες (10 έως 13)
             for (let h = window.hStart; h <= window.hEnd; h++) {
                 if (h >= 1 && h <= 24) {
-                    let hIdx = h + 1; // Στήλες 2 έως 25 είναι οι ώρες 01:00 έως 24:00
+                    let hIdx = h + 1; // Index 2 είναι η 1η ώρα (01:00), άρα η 10η ώρα είναι στο index 11
                     let val = parseNum(vals[hIdx]);
                     dailyConstrainedMwh[d] += val;
                 }
@@ -690,7 +696,6 @@ function updateSurplusTab() {
 
     renderSurplusChart(labels, surplusData, constraintsData);
 }
-
 function renderSurplusChart(labels, surplusData, constraintsData) {
     const canvas = document.getElementById('surplusChart');
     if (!canvas) return;
