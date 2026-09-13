@@ -596,7 +596,7 @@ function updateSurplusTab() {
     const selectedMonth = monthSelect.value;
     if (!selectedMonth) return;
 
-    // 1. Δομή για τα Constraints ανά ημέρα και μονάδα
+    // 1. Δομή για τα Constraints ανά ημέρα και κανονικοποιημένη μονάδα
     let constraintsByDay = {};
     
     rawData.daily_gas_constraints.forEach(c => {
@@ -610,19 +610,19 @@ function updateSurplusTab() {
         
         if (hFrom !== -1 && hTo !== -1) {
             if (!constraintsByDay[d]) constraintsByDay[d] = {};
-            if (!constraintsByDay[d][unit]) constraintsByDay[d][unit] = {};
-            
-            let hStart = Math.min(hFrom, hTo);     
-            let hEnd = Math.max(hFrom, hTo) - 1;   
-            
-            for (let h = hStart; h <= hEnd; h++) {
-                constraintsByDay[d][unit][h] = true;
+            if (!constraintsByDay[d][unit]) {
+                constraintsByDay[d][unit] = { hStart: Math.min(hFrom, hTo), hEnd: Math.max(hFrom, hTo) - 1 };
+            } else {
+                // Αν υπάρχουν πολλαπλές γραμμές για την ίδια μονάδα, διευρύνουμε το παράθυρο αν χρειαστεί
+                constraintsByDay[d][unit].hStart = Math.min(constraintsByDay[d][unit].hStart, Math.min(hFrom, hTo));
+                constraintsByDay[d][unit].hEnd = Math.max(constraintsByDay[d][unit].hEnd, Math.max(hFrom, hTo) - 1);
             }
         }
     });
 
-    // 2. Υπολογισμός MWh (Generic Constraints) βάσει του SCADA Hourly
+    // 2. Υπολογισμός MWh (Generic Constraints) βάσει του SCADA Hourly (χωρίς διπλοεγγραφές ανά μονάδα)
     let dailyConstrainedMwh = {};
+    
     rawData.scadaHourly.forEach(row => {
         let vals = Object.values(row);
         let d = parseDate(vals[0]); 
@@ -634,12 +634,16 @@ function updateSurplusTab() {
         
         let cUnit = getCanonicalUnitName(rawUnit);
         
+        // Αν η μονάδα αυτή είχε constraint τη συγκεκριμένη μέρα
         if (constraintsByDay[d][cUnit]) {
             if (!dailyConstrainedMwh[d]) dailyConstrainedMwh[d] = 0;
             
-            for (let h = 1; h <= 24; h++) {
-                if (constraintsByDay[d][cUnit][h]) {
-                    let hIdx = h + 1; 
+            let window = constraintsByDay[d][cUnit];
+            
+            // Αθροίζουμε την παραγωγή ΜΟΝΟ 1 φορά για το εύρος ωρών της μονάδας
+            for (let h = window.hStart; h <= window.hEnd; h++) {
+                if (h >= 1 && h <= 24) {
+                    let hIdx = h + 1; // Στήλες 2 έως 25 είναι οι ώρες 01:00 έως 24:00
                     let val = parseNum(vals[hIdx]);
                     dailyConstrainedMwh[d] += val;
                 }
@@ -670,7 +674,6 @@ function updateSurplusTab() {
     allDatesInMonth.forEach(day => {
         labels.push(day.split('-')[2]); 
         
-        // --- ΑΛΛΑΓΗ ΕΔΩ: Μετατροπή σε θετικό με Math.abs() ---
         let s = Math.abs(dailySurplusMap[day] || 0); 
         let c = dailyConstrainedMwh[day] || 0;
         
@@ -681,7 +684,7 @@ function updateSurplusTab() {
         sumConstraints += c;
     });
 
-    // Ενημέρωση KPIs (εμφανίζονται πλέον θετικά και τα σύνολα)
+    // Ενημέρωση KPIs
     document.getElementById('kpiMonthSurplus').innerText = sumSurplus.toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1});
     document.getElementById('kpiMonthConstraints').innerText = sumConstraints.toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1});
 
