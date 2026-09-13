@@ -2,7 +2,6 @@
 // DATA FETCHING & NORMALIZATION (data.js)
 // =========================================================================
 
-// 🔴 ΒΑΛΕ ΕΔΩ ΤΟ GOOGLE APPS SCRIPT WEB APP URL ΣΟΥ 🔴
 const API_URL = "https://script.google.com/macros/s/AKfycbwiv88Zu0bIdiB_EBRIHHTYKbxfbBRtH--k2iX9r7W-AwaJek8acG2SjvzgtnoSFFuZwQ/exec"; 
 
 let rawData = { 
@@ -11,10 +10,11 @@ let rawData = {
     scadaHourly: [], 
     henex: [], 
     mcpHourly: [], 
-    efficiency: [] 
+    efficiency: [],
+    daily_surplus: [],          // <--- ΠΡΟΣΘΗΚΗ
+    daily_gas_constraints: []   // <--- ΠΡΟΣΘΗΚΗ
 };
 
-// Προεπιλεγμένη γλώσσα ΕΝΑΡΞΗΣ είναι τα Αγγλικά
 let currentLang = 'en'; 
 
 const i18n = {
@@ -26,9 +26,9 @@ const i18n = {
         nextUpdate: "Next Update:",
         dateLabel: "Date:",
         tabOverview: "Daily Overview",
-        tabIspScada: "ISP vs SCADA",
-        tabEconomics: "Economics & Out-of-Merit",
-        tabEfficiency: "Efficiency Classes",
+        tabEconomics: "Daily Economics",
+        tabIspScada: "Monthly Analytics",
+        tabSurplus: "System Needs (Surplus)",
         btnMethodology: "Methodology & Assumptions",
         btnClose: "Close",
         modalTitle: "Methodology & Core Assumptions",
@@ -49,9 +49,9 @@ const i18n = {
         nextUpdate: "Επόμενη Ενημέρωση:",
         dateLabel: "Ημερομηνία:",
         tabOverview: "Ημερήσια Επισκόπηση",
-        tabIspScada: "Πρόγραμμα vs Πραγματικότητα",
-        tabEconomics: "Οικονομικά & Out-of-Merit",
-        tabEfficiency: "Κλάσεις Απόδοσης",
+        tabEconomics: "Ημερήσια Οικονομικά",
+        tabIspScada: "Μηνιαία Ανάλυση",
+        tabSurplus: "Ανάγκες Συστήματος (Surplus)",
         btnMethodology: "Μεθοδολογία & Παραδοχές",
         btnClose: "Κλείσιμο",
         modalTitle: "Μεθοδολογία & Βασικές Παραδοχές",
@@ -70,7 +70,6 @@ function setLang(lang) {
     currentLang = lang;
     const t = i18n[lang];
     
-    // Header
     document.getElementById('pageTitle').innerText = t.title;
     document.getElementById('mainTitle').innerText = t.title;
     document.getElementById('dataSourceText').innerText = t.source;
@@ -78,22 +77,18 @@ function setLang(lang) {
     document.getElementById('lastUpdateLabel').innerText = t.lastUpdate;
     document.getElementById('nextUpdateLabel').innerText = t.nextUpdate;
     
-    // Modal
     if(document.getElementById('btnMethodologyText')) document.getElementById('btnMethodologyText').innerText = t.btnMethodology;
     if(document.getElementById('modalTitle')) document.getElementById('modalTitle').innerText = t.modalTitle;
     if(document.getElementById('modalBody')) document.getElementById('modalBody').innerHTML = t.modalBody;
     if(document.getElementById('btnClose')) document.getElementById('btnClose').innerText = t.btnClose;
 
-    // Tabs
     document.getElementById('tabBtnOverview').innerText = t.tabOverview;
-    document.getElementById('tabBtnIspScada').innerText = t.tabIspScada;
     document.getElementById('tabBtnEconomics').innerText = t.tabEconomics;
-    document.getElementById('tabBtnEfficiency').innerText = t.tabEfficiency;
+    document.getElementById('tabBtnIspScada').innerText = t.tabIspScada;
+    document.getElementById('tabBtnSurplus').innerText = t.tabSurplus;
     
-    // Elements (if they exist in active view)
     if(document.getElementById('dateLabel')) document.getElementById('dateLabel').innerText = t.dateLabel;
 
-    // Button Styling (Default active color is blue for Gas dashboard instead of emerald)
     if(lang === 'el') {
         document.getElementById('btnGr').className = "px-2 py-1 rounded bg-blue-600 text-white transition";
         document.getElementById('btnEn').className = "px-2 py-1 rounded text-slate-400 hover:text-white transition";
@@ -101,25 +96,6 @@ function setLang(lang) {
         document.getElementById('btnEn').className = "px-2 py-1 rounded bg-blue-600 text-white transition";
         document.getElementById('btnGr').className = "px-2 py-1 rounded text-slate-400 hover:text-white transition";
     }
-
-    // Refresh charts if dashboard is ready
-    if (typeof updateDashboard === "function") updateDashboard();
-}
-
-function switchTab(tabId) {
-    const tabs = ['overview', 'ispScada', 'economics', 'efficiency'];
-    tabs.forEach(t => {
-        const btn = document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1));
-        const view = document.getElementById('view' + t.charAt(0).toUpperCase() + t.slice(1));
-        
-        if (t === tabId) {
-            btn.className = "text-blue-400 font-bold border-b-2 border-blue-400 pb-2 px-2 transition whitespace-nowrap";
-            view.classList.remove('hidden');
-        } else {
-            btn.className = "text-slate-500 hover:text-blue-300 pb-2 px-2 transition whitespace-nowrap";
-            view.classList.add('hidden');
-        }
-    });
 
     if (typeof updateDashboard === "function") updateDashboard();
 }
@@ -158,10 +134,11 @@ async function fetchMarketData() {
         rawData.henex = json.henex_indices || [];
         rawData.mcpHourly = json.dam_mcp_hourly || [];
         rawData.efficiency = json.thermal_efficiency || [];
+        rawData.daily_surplus = json.daily_surplus || [];                // <--- ΠΡΟΣΘΗΚΗ
+        rawData.daily_gas_constraints = json.daily_gas_constraints || []; // <--- ΠΡΟΣΘΗΚΗ
         
         console.log("Data successfully loaded:", rawData);
 
-        // Γέμισμα του Dropdown Ημερομηνιών
         const dates = [...new Set([
             ...rawData.isp.map(d => Object.values(d)[0]),
             ...rawData.scada.map(d => Object.values(d)[0])
@@ -174,8 +151,6 @@ async function fetchMarketData() {
 
         updateFreshness(dates);
 
-        // Απόκρυψη loader (Θα καλεστεί τελικά και στο window.onload μέσω dashboard.js, 
-        // αλλά διασφαλίζουμε ότι τα data ήρθαν)
         const overlay = document.getElementById('loading-overlay');
         if (overlay) {
             document.getElementById('loading-percentage').innerText = "100%";
@@ -186,7 +161,6 @@ async function fetchMarketData() {
             }, 800);
         }
         
-        // Αρχικοποίηση γλώσσας σε Αγγλικά
         setLang('en');
 
     } catch (error) {
@@ -196,5 +170,4 @@ async function fetchMarketData() {
     }
 }
 
-// Εκκίνηση fetch
 document.addEventListener('DOMContentLoaded', fetchMarketData);
