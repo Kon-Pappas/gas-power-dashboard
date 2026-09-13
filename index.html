@@ -58,9 +58,8 @@
         <div class="flex space-x-6 border-b border-slate-800 pb-2 overflow-x-auto">
             <button id="tabBtnOverview" onclick="switchTab('overview')" class="text-blue-400 font-bold border-b-2 border-blue-400 pb-2 px-2 transition whitespace-nowrap">Daily Overview</button>
             <button id="tabBtnEconomics" onclick="switchTab('economics')" class="text-slate-500 hover:text-blue-300 pb-2 px-2 transition whitespace-nowrap">Daily Economics</button>
-            <!-- Κρατάμε το ID ispScada για να μην χτυπήσει το data.js, αλλά το περιεχόμενο θα είναι Monthly -->
             <button id="tabBtnIspScada" onclick="switchTab('ispScada')" class="text-slate-500 hover:text-blue-300 pb-2 px-2 transition whitespace-nowrap">Monthly Analytics</button>
-            <button id="tabBtnEfficiency" onclick="switchTab('efficiency')" class="text-slate-500 hover:text-blue-300 pb-2 px-2 transition whitespace-nowrap">Efficiency Classes</button>
+            <button id="tabBtnSurplus" onclick="switchTab('surplus')" class="text-slate-500 hover:text-blue-300 pb-2 px-2 transition whitespace-nowrap">System Needs (Surplus)</button>
         </div>
 
         <!-- VIEW 1: DAILY OVERVIEW -->
@@ -77,7 +76,6 @@
                         <span class="text-xl font-bold text-orange-400" id="kpiTotalScada">0.0</span>
                     </div>
                 </div>
-                <!-- ΕΠΙΛΟΓΕΑΣ ΗΜΕΡΟΜΗΝΙΑΣ (View 1) -->
                 <div class="flex items-center gap-2 bg-slate-900/50 p-2 rounded-lg border border-slate-600 shadow-sm">
                     <label class="text-xs text-slate-300 font-medium" id="dateLabel">Date:</label>
                     <select id="dateSelect" onchange="syncDate('dateSelect', 'dateSelectEco'); updateDashboard()" class="bg-slate-800 text-slate-200 text-sm font-semibold rounded p-1 outline-none focus:border-blue-500 transition cursor-pointer"></select>
@@ -119,7 +117,6 @@
         <!-- VIEW 2: DAILY ECONOMICS -->
         <div id="viewEconomics" class="space-y-6 hidden">
             <div class="flex justify-end items-center mb-[-10px]">
-                <!-- ΕΠΙΛΟΓΕΑΣ ΗΜΕΡΟΜΗΝΙΑΣ (View 2) -->
                 <div class="flex items-center gap-2 bg-slate-900/50 p-2 rounded-lg border border-slate-600 shadow-sm">
                     <label class="text-xs text-slate-300 font-medium">Date:</label>
                     <select id="dateSelectEco" onchange="syncDate('dateSelectEco', 'dateSelect'); updateDashboard()" class="bg-slate-800 text-slate-200 text-sm font-semibold rounded p-1 outline-none focus:border-blue-500 transition cursor-pointer"></select>
@@ -197,10 +194,9 @@
         <!-- VIEW 3: MONTHLY ANALYTICS -->
         <div id="viewIspScada" class="space-y-6 hidden">
             <div class="flex justify-end items-center">
-                <!-- ΕΠΙΛΟΓΕΑΣ ΜΗΝΑ (View 3) -->
                 <div class="flex items-center gap-2 bg-slate-900/50 p-2 rounded-lg border border-slate-600 shadow-sm">
                     <label class="text-xs text-slate-300 font-medium">Month:</label>
-                    <select id="monthSelect" onchange="updateMonthlyTab()" class="bg-slate-800 text-slate-200 text-sm font-semibold rounded p-1 outline-none focus:border-blue-500 transition cursor-pointer"></select>
+                    <select id="monthSelect" onchange="syncDate('monthSelect', 'monthSelectSurplus'); updateDashboard()" class="bg-slate-800 text-slate-200 text-sm font-semibold rounded p-1 outline-none focus:border-blue-500 transition cursor-pointer"></select>
                 </div>
             </div>
 
@@ -217,9 +213,43 @@
             </div>
         </div>
 
-        <!-- VIEW 4: EFFICIENCY -->
-        <div id="viewEfficiency" class="space-y-8 hidden">
-            <!-- Efficiency Content -->
+        <!-- VIEW 4: SYSTEM NEEDS & CONSTRAINTS -->
+        <div id="viewSurplus" class="space-y-6 hidden">
+            <div class="flex justify-end items-center mb-[-10px]">
+                <div class="flex items-center gap-2 bg-slate-900/50 p-2 rounded-lg border border-slate-600 shadow-sm">
+                    <label class="text-xs text-slate-300 font-medium">Month:</label>
+                    <select id="monthSelectSurplus" onchange="syncDate('monthSelectSurplus', 'monthSelect'); updateDashboard()" class="bg-slate-800 text-slate-200 text-sm font-semibold rounded p-1 outline-none focus:border-blue-500 transition cursor-pointer"></select>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-slate-800/60 p-5 rounded-xl border border-slate-700 flex flex-col justify-center">
+                    <span class="text-sm text-slate-400 uppercase tracking-wider mb-1">Total Monthly Surplus</span>
+                    <div class="flex items-baseline gap-2">
+                        <span id="kpiMonthSurplus" class="text-3xl font-bold text-blue-400">0</span>
+                        <span class="text-slate-500">MWh</span>
+                    </div>
+                </div>
+                <div class="bg-slate-800/60 p-5 rounded-xl border border-slate-700 flex flex-col justify-center">
+                    <span class="text-sm text-slate-400 uppercase tracking-wider mb-1">Total Generic Constraints</span>
+                    <div class="flex items-baseline gap-2">
+                        <span id="kpiMonthConstraints" class="text-3xl font-bold text-rose-400">0</span>
+                        <span class="text-slate-500">MWh</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-slate-800/40 p-6 rounded-xl border border-slate-700">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-200">Residual Surplus vs Generic Constraints</h2>
+                        <p class="text-xs text-slate-400">Daily dynamic calculation from ISP & Hourly SCADA actuals</p>
+                    </div>
+                </div>
+                <div class="relative h-[450px]">
+                    <canvas id="surplusChart"></canvas>
+                </div>
+            </div>
         </div>
 
     </div>
@@ -252,7 +282,6 @@
         </div>
     </div>
 
-    <!-- Modal Script -->
     <script>
         function openMethodologyModal() {
             const modal = document.getElementById('methodologyModal');
