@@ -8,14 +8,21 @@ const CO2_COST_PER_MWH = 28.0;
 // ==========================================
 let overviewChartInst = null;
 let monthlyChartInst = null;
+let surplusChartInst = null;
 let selectorsInitialized = false;
 
 // Έξυπνη επιδιόρθωση του λεξικού i18n
 document.addEventListener("DOMContentLoaded", () => {
     setTimeout(() => {
         if (typeof i18n !== 'undefined') {
-            if (i18n.en) i18n.en.tabIspScada = "Monthly Analytics";
-            if (i18n.el) i18n.el.tabIspScada = "Μηνιαία Ανάλυση";
+            if (i18n.en) {
+                i18n.en.tabIspScada = "Monthly Analytics";
+                i18n.en.tabSurplus = "System Needs (Surplus)";
+            }
+            if (i18n.el) {
+                i18n.el.tabIspScada = "Μηνιαία Ανάλυση";
+                i18n.el.tabSurplus = "Ανάγκες Συστήματος (Surplus)";
+            }
             if (typeof setLang === 'function' && typeof currentLang !== 'undefined') {
                 setLang(currentLang);
             }
@@ -52,12 +59,26 @@ function syncDate(sourceId, targetId) {
     }
 }
 
+// Συνάρτηση μετατροπής της ώρας (π.χ. "9:59" -> 10)
+function getHourNumber(timeStr) {
+    if (timeStr === undefined || timeStr === null || timeStr === "") return -1;
+    let s = String(timeStr).trim();
+    let parts = s.split(':');
+    if (parts.length >= 2) {
+        let h = parseInt(parts[0], 10);
+        let m = parseInt(parts[1], 10);
+        return Math.round(h + m / 60);
+    }
+    return parseInt(s, 10) || -1;
+}
+
 function initExtraSelectors() {
     if (selectorsInitialized) return;
     
     const mainDs = document.getElementById('dateSelect');
     const ecoDs = document.getElementById('dateSelectEco');
     const monthDs = document.getElementById('monthSelect');
+    const monthSurplusDs = document.getElementById('monthSelectSurplus');
     
     if (!mainDs || mainDs.options.length === 0) return; 
     
@@ -69,7 +90,12 @@ function initExtraSelectors() {
     if (monthDs && monthDs.options.length === 0) {
         const allDates = Array.from(mainDs.options).map(opt => opt.value);
         const months = [...new Set(allDates.map(d => d.substring(0, 7)))];
-        monthDs.innerHTML = months.map(m => `<option value="${m}">${m}</option>`).join('');
+        const optionsHtml = months.map(m => `<option value="${m}">${m}</option>`).join('');
+        monthDs.innerHTML = optionsHtml;
+        if (monthSurplusDs) {
+            monthSurplusDs.innerHTML = optionsHtml;
+            monthSurplusDs.value = monthDs.value;
+        }
     }
     
     selectorsInitialized = true;
@@ -164,7 +190,7 @@ function getUnitMetadata(unitName) {
 // TAB SWITCHING CONTROLLER
 // ==========================================
 function switchTab(tabId) {
-    const tabs = ['overview', 'economics', 'ispScada', 'efficiency'];
+    const tabs = ['overview', 'economics', 'ispScada', 'surplus'];
     tabs.forEach(t => {
         const btn = document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1));
         const view = document.getElementById('view' + t.charAt(0).toUpperCase() + t.slice(1));
@@ -181,6 +207,7 @@ function switchTab(tabId) {
     if (tabId === 'overview') updateOverviewTab();
     if (tabId === 'economics') updateEconomicsTab();
     if (tabId === 'ispScada') updateMonthlyTab(); 
+    if (tabId === 'surplus') updateSurplusTab(); 
 }
 
 // ==========================================
@@ -191,6 +218,7 @@ function updateDashboard() {
     updateOverviewTab();
     updateEconomicsTab();
     updateMonthlyTab();
+    updateSurplusTab();
 }
 
 // ==========================================
@@ -252,9 +280,7 @@ function updateOverviewTab() {
     const ispColors = [];
     const scadaColors = [];
 
-    const colorMap = {
-        1: '#06b6d4', 2: '#3b82f6', 3: '#f97316'
-    };
+    const colorMap = { 1: '#06b6d4', 2: '#3b82f6', 3: '#f97316' };
 
     unitsArray.forEach(u => {
         labels.push(u.name);
@@ -437,19 +463,17 @@ function updateMonthlyTab() {
     const labels = [];
     const hgsidaData = [];
     const avgCostData = [];
-    const effData = []; // Ο νέος πίνακας για το Fleet Efficiency
+    const effData = [];
 
     allDatesInMonth.forEach(day => {
         const dayNumber = day.split('-')[2];
         labels.push(dayNumber);
 
-        // 1. HGSIDA
         let hgsida = 0;
         const henexDay = rawData.henex.find(d => parseDate(Object.values(d)[0]) === day);
         if (henexDay) hgsida = parseNum(Object.values(henexDay)[1]);
         hgsidaData.push(hgsida);
 
-        // 2 & 3. Fleet Avg Gas Cost & Fleet Efficiency
         const scadaDay = rawData.scada.filter(d => parseDate(Object.values(d)[0]) === day);
         let dailyTotalMwh = 0;
         let dailyTotalCost = 0;
@@ -497,36 +521,36 @@ function renderMonthlyChart(labels, hgsidaData, avgCostData, effData) {
                 { 
                     label: 'HGSIDA Price (€/MWh)', 
                     data: hgsidaData, 
-                    borderColor: '#3b82f6', // Blue
+                    borderColor: '#3b82f6', 
                     backgroundColor: 'rgba(59, 130, 246, 0.1)',
                     borderWidth: 2,
                     tension: 0.3,
                     pointRadius: 3,
                     pointBackgroundColor: '#3b82f6',
-                    yAxisID: 'y' // Συνδέεται με τον αριστερό άξονα Y
+                    yAxisID: 'y'
                 }, 
                 { 
                     label: 'Fleet Avg Gas Cost (€/MWh)', 
                     data: avgCostData, 
-                    borderColor: '#f59e0b', // Amber
+                    borderColor: '#f59e0b', 
                     backgroundColor: 'rgba(245, 158, 11, 0.1)',
                     borderWidth: 2,
                     tension: 0.3,
                     pointRadius: 3,
                     pointBackgroundColor: '#f59e0b',
-                    yAxisID: 'y' // Συνδέεται με τον αριστερό άξονα Y
+                    yAxisID: 'y'
                 },
                 {
                     label: 'Fleet Avg Efficiency (%)',
                     data: effData,
-                    borderColor: '#10b981', // Emerald (Πράσινο)
+                    borderColor: '#10b981', 
                     backgroundColor: 'rgba(16, 185, 129, 0.1)',
                     borderWidth: 2,
-                    borderDash: [5, 5], // Διακεκομμένη γραμμή για να ξεχωρίζει ως δείκτης ποιότητας
+                    borderDash: [5, 5], 
                     tension: 0.3,
                     pointRadius: 3,
                     pointBackgroundColor: '#10b981',
-                    yAxisID: 'y1' // Συνδέεται με τον ΝΕΟ δεξιό άξονα Y
+                    yAxisID: 'y1' 
                 }
             ] 
         }, 
@@ -534,11 +558,7 @@ function renderMonthlyChart(labels, hgsidaData, avgCostData, effData) {
             responsive: true, 
             maintainAspectRatio: false, 
             plugins: { 
-                legend: { 
-                    display: true,
-                    position: 'top',
-                    labels: { boxWidth: 15, font: { size: 12 } }
-                }, 
+                legend: { display: true, position: 'top', labels: { boxWidth: 15, font: { size: 12 } } }, 
                 tooltip: {
                     mode: 'index',
                     intersect: false,
@@ -547,10 +567,8 @@ function renderMonthlyChart(labels, hgsidaData, avgCostData, effData) {
                             let label = context.dataset.label || '';
                             if (label) label += ': ';
                             if (context.dataset.yAxisID === 'y1') {
-                                // Αν είναι η απόδοση, εμφάνισε ποσοστό %
                                 label += context.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' %';
                             } else {
-                                // Αν είναι κόστος/τιμή, εμφάνισε Ευρώ €
                                 label += context.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' €';
                             }
                             return label;
@@ -559,33 +577,172 @@ function renderMonthlyChart(labels, hgsidaData, avgCostData, effData) {
                 }
             }, 
             scales: { 
-                x: { 
-                    grid: { color: '#1e293b' },
-                    title: { display: true, text: 'Day of Month', color: '#64748b' }
+                x: { grid: { color: '#1e293b' }, title: { display: true, text: 'Day of Month', color: '#64748b' } }, 
+                y: { type: 'linear', display: true, position: 'left', grid: { color: '#334155' }, title: { display: true, text: '€ / MWh' } },
+                y1: { type: 'linear', display: true, position: 'right', min: 50, max: 63, grid: { drawOnChartArea: false }, title: { display: true, text: 'Efficiency (%)' } }
+            },
+            interaction: { mode: 'nearest', axis: 'x', intersect: false }
+        } 
+    });
+}
+
+// ==========================================
+// TAB 4: SYSTEM NEEDS (SURPLUS & CONSTRAINTS)
+// ==========================================
+function updateSurplusTab() {
+    const monthSelect = document.getElementById('monthSelectSurplus');
+    if (!monthSelect || !rawData || !rawData.daily_surplus || !rawData.daily_gas_constraints || !rawData.scada_generation_hourly) return;
+    
+    const selectedMonth = monthSelect.value;
+    if (!selectedMonth) return;
+
+    // 1. Δομή για να κρατάμε ποιες ώρες (1-24) κάθε μονάδα ήταν υπό Constraint ανά ημέρα
+    let constraintsByDay = {};
+    
+    rawData.daily_gas_constraints.forEach(c => {
+        let d = parseDate(c["Date"] || Object.values(c)[0]);
+        if (!d.startsWith(selectedMonth)) return;
+        
+        let unit = getCanonicalUnitName(c["Gas Factory"] || Object.values(c)[1]);
+        let hFrom = getHourNumber(c["Hour From"] || Object.values(c)[2]);
+        let hTo = getHourNumber(c["Hour To"] || Object.values(c)[3]);
+        
+        if (hFrom !== -1 && hTo !== -1) {
+            if (!constraintsByDay[d]) constraintsByDay[d] = {};
+            if (!constraintsByDay[d][unit]) constraintsByDay[d][unit] = {};
+            
+            // --- ΔΙΟΡΘΩΣΗ: Ακριβής Αντιστοίχιση Ωρών ---
+            // Το διάστημα π.χ. 9:59 -> 14:59 μεταφράζεται σε hFrom=10, hTo=15.
+            // Ο χρήστης θέλει τις στήλες: 10:00, 11:00, 12:00, 13:00, 14:00 (δηλαδή index ωρών 10 έως 14)
+            let hStart = Math.min(hFrom, hTo);         // 10
+            let hEnd = Math.max(hFrom, hTo) - 1;       // 15 - 1 = 14
+            
+            for (let h = hStart; h <= hEnd; h++) {
+                constraintsByDay[d][unit][h] = true;
+            }
+        }
+    });
+
+    // 2. Υπολογισμός των παραχθέντων MWh (Generic Constraints) βάσει του SCADA Hourly
+    let dailyConstrainedMwh = {};
+    rawData.scada_generation_hourly.forEach(row => {
+        let d = parseDate(row["Ημερομηνία"] || Object.values(row)[0]);
+        if (!d.startsWith(selectedMonth)) return;
+        if (!constraintsByDay[d]) return; 
+        
+        let rawUnit = String(row["Μονάδα Φ.Α."] || Object.values(row)[1]).trim();
+        if (rawUnit === "TOTAL GAS UNITS" || rawUnit.includes("Σύνολο") || rawUnit === "NAN") return;
+        
+        let cUnit = getCanonicalUnitName(rawUnit);
+        
+        // Αν η μονάδα αυτή είχε constraints τη συγκεκριμένη μέρα
+        if (constraintsByDay[d][cUnit]) {
+            if (!dailyConstrainedMwh[d]) dailyConstrainedMwh[d] = 0;
+            
+            // Αθροίζουμε την παραγωγή ΜΟΝΟ για τις ώρες που ίσχυε ο περιορισμός
+            for (let h = 1; h <= 24; h++) {
+                if (constraintsByDay[d][cUnit][h]) {
+                    // Στο Object.values(row):
+                    // θέση 0 = ημερομηνία, θέση 1 = μονάδα
+                    // θέσεις 2-25 είναι οι ώρες 01:00 έως 24:00.
+                    // Συνεπώς, για h=10 (που είναι το 10:00), ο δείκτης είναι h + 1 = 11.
+                    let hIdx = h + 1; 
+                    let val = parseNum(Object.values(row)[hIdx]);
+                    dailyConstrainedMwh[d] += val;
+                }
+            }
+        }
+    });
+
+    // 3. Διάβασμα του Daily Surplus
+    let dailySurplusMap = {};
+    rawData.daily_surplus.forEach(row => {
+        let d = parseDate(row["Date"] || Object.values(row)[0]);
+        if (d.startsWith(selectedMonth)) {
+            let val = parseNum(row["Total Daily Surplus (MWh)"] || Object.values(row)[1]);
+            dailySurplusMap[d] = val;
+        }
+    });
+
+    // 4. Ενοποίηση δεδομένων για το γράφημα
+    const allDatesInMonth = [...new Set([...Object.keys(dailyConstrainedMwh), ...Object.keys(dailySurplusMap)])].sort();
+    
+    const labels = [];
+    const surplusData = [];
+    const constraintsData = [];
+    let sumSurplus = 0;
+    let sumConstraints = 0;
+
+    allDatesInMonth.forEach(day => {
+        labels.push(day.split('-')[2]); 
+        
+        let s = dailySurplusMap[day] || 0;
+        let c = dailyConstrainedMwh[day] || 0;
+        
+        surplusData.push(s);
+        constraintsData.push(c);
+        
+        sumSurplus += s;
+        sumConstraints += c;
+    });
+
+    // Ενημέρωση KPIs
+    document.getElementById('kpiMonthSurplus').innerText = sumSurplus.toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1});
+    document.getElementById('kpiMonthConstraints').innerText = sumConstraints.toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1});
+
+    renderSurplusChart(labels, surplusData, constraintsData);
+}
+
+function renderSurplusChart(labels, surplusData, constraintsData) {
+    const canvas = document.getElementById('surplusChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    if (surplusChartInst) surplusChartInst.destroy();
+    
+    Chart.defaults.color = '#94a3b8';
+    Chart.defaults.font.family = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+    surplusChartInst = new Chart(ctx, { 
+        type: 'bar', 
+        data: { 
+            labels: labels, 
+            datasets: [
+                { 
+                    label: 'Residual Energy Surplus', 
+                    data: surplusData, 
+                    backgroundColor: '#3b82f6', // Μπλε
+                    borderRadius: 4
                 }, 
-                y: { 
-                    type: 'linear',
-                    display: true,
-                    position: 'left',
-                    grid: { color: '#334155' },
-                    title: { display: true, text: '€ / MWh' }
-                },
-                y1: {
-                    type: 'linear',
-                    display: true,
-                    position: 'right',
-                    min: 50,
-                    max: 63,
-                    grid: { 
-                        drawOnChartArea: false // Για να μην μπερδεύονται τα grid lines με του αριστερού άξονα
-                    },
-                    title: { display: true, text: 'Efficiency (%)' }
+                { 
+                    label: 'Generic Constraints (Out of Merit)', 
+                    data: constraintsData, 
+                    backgroundColor: '#f43f5e', // Κόκκινο (Rose)
+                    borderRadius: 4
+                }
+            ] 
+        }, 
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top', labels: { boxWidth: 15, font: { size: 12 } } },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) label += ': ';
+                            label += context.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + ' MWh';
+                            return label;
+                        }
+                    }
                 }
             },
-            interaction: {
-                mode: 'nearest',
-                axis: 'x',
-                intersect: false
+            scales: {
+                x: { grid: { display: false }, title: { display: true, text: 'Day of Month', color: '#64748b' } },
+                y: { grid: { color: '#334155' }, title: { display: true, text: 'MWh' } }
             }
         } 
     });
