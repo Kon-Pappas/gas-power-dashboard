@@ -601,12 +601,12 @@ function updateSurplusTab() {
     
     rawData.daily_gas_constraints.forEach(c => {
         let vals = Object.values(c);
-        let d = parseDate(vals[0]); // 1η στήλη: Ημερομηνία
+        let d = parseDate(vals[0]); 
         if (!d.startsWith(selectedMonth)) return;
         
-        let unit = getCanonicalUnitName(vals[1]); // 2η στήλη: Gas Factory
-        let hFrom = getHourNumber(vals[2]);       // 3η στήλη: Hour From
-        let hTo = getHourNumber(vals[3]);         // 4η στήλη: Hour To
+        let unit = getCanonicalUnitName(vals[1]); 
+        let hFrom = getHourNumber(vals[2]);       
+        let hTo = getHourNumber(vals[3]);         
         
         if (hFrom !== -1 && hTo !== -1) {
             if (!constraintsByDay[d]) constraintsByDay[d] = {};
@@ -625,11 +625,11 @@ function updateSurplusTab() {
     let dailyConstrainedMwh = {};
     rawData.scadaHourly.forEach(row => {
         let vals = Object.values(row);
-        let d = parseDate(vals[0]); // 1η στήλη: Ημερομηνία
+        let d = parseDate(vals[0]); 
         if (!d.startsWith(selectedMonth)) return;
         if (!constraintsByDay[d]) return; 
         
-        let rawUnit = String(vals[1] || "").trim(); // 2η στήλη: Μονάδα Φ.Α.
+        let rawUnit = String(vals[1] || "").trim(); 
         if (rawUnit === "TOTAL GAS UNITS" || rawUnit.includes("Σύνολο") || rawUnit === "NAN") return;
         
         let cUnit = getCanonicalUnitName(rawUnit);
@@ -639,7 +639,7 @@ function updateSurplusTab() {
             
             for (let h = 1; h <= 24; h++) {
                 if (constraintsByDay[d][cUnit][h]) {
-                    let hIdx = h + 1; // Στήλες 2 έως 25 είναι οι ώρες 01:00 έως 24:00
+                    let hIdx = h + 1; 
                     let val = parseNum(vals[hIdx]);
                     dailyConstrainedMwh[d] += val;
                 }
@@ -651,9 +651,9 @@ function updateSurplusTab() {
     let dailySurplusMap = {};
     rawData.daily_surplus.forEach(row => {
         let vals = Object.values(row);
-        let d = parseDate(vals[0]); // 1η στήλη: Ημερομηνία
+        let d = parseDate(vals[0]); 
         if (d.startsWith(selectedMonth)) {
-            let val = parseNum(vals[1]); // 2η στήλη: Total Daily Surplus (MWh)
+            let val = parseNum(vals[1]); 
             dailySurplusMap[d] = val;
         }
     });
@@ -667,10 +667,11 @@ function updateSurplusTab() {
     let sumSurplus = 0;
     let sumConstraints = 0;
 
-    allDatesInMonth.flows = allDatesInMonth.forEach(day => {
+    allDatesInMonth.forEach(day => {
         labels.push(day.split('-')[2]); 
         
-        let s = dailySurplusMap[day] || 0;
+        // --- ΑΛΛΑΓΗ ΕΔΩ: Μετατροπή σε θετικό με Math.abs() ---
+        let s = Math.abs(dailySurplusMap[day] || 0); 
         let c = dailyConstrainedMwh[day] || 0;
         
         surplusData.push(s);
@@ -680,7 +681,7 @@ function updateSurplusTab() {
         sumConstraints += c;
     });
 
-    // Ενημέρωση KPIs
+    // Ενημέρωση KPIs (εμφανίζονται πλέον θετικά και τα σύνολα)
     document.getElementById('kpiMonthSurplus').innerText = sumSurplus.toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1});
     document.getElementById('kpiMonthConstraints').innerText = sumConstraints.toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1});
 
