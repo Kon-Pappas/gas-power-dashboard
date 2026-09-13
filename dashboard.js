@@ -10,8 +10,7 @@ let overviewChartInst = null;
 let monthlyChartInst = null;
 let selectorsInitialized = false;
 
-// Έξυπνη επιδιόρθωση του λεξικού i18n του data.js 
-// χωρίς να χρειάζεται να πειράξεις το αρχείο data.js
+// Έξυπνη επιδιόρθωση του λεξικού i18n
 document.addEventListener("DOMContentLoaded", () => {
     setTimeout(() => {
         if (typeof i18n !== 'undefined') {
@@ -21,7 +20,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 setLang(currentLang);
             }
         }
-    }, 500); // Περιμένουμε μισό δευτερόλεπτο να φορτώσει το data.js
+    }, 500); 
 });
 
 // ==========================================
@@ -45,7 +44,6 @@ function formatEuro(amount) {
     return amount.toLocaleString('el-GR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
-// Συγχρονισμός επιλογών ημερομηνίας ανάμεσα στα Tabs 1 & 2
 function syncDate(sourceId, targetId) {
     const source = document.getElementById(sourceId);
     const target = document.getElementById(targetId);
@@ -54,7 +52,6 @@ function syncDate(sourceId, targetId) {
     }
 }
 
-// Αρχικοποίηση των Dropdowns για View 2 & View 3
 function initExtraSelectors() {
     if (selectorsInitialized) return;
     
@@ -78,7 +75,6 @@ function initExtraSelectors() {
     selectorsInitialized = true;
 }
 
-// Δημιουργία Seamless Diagonal Pattern για το SCADA
 function createDiagonalPattern(colorHex) {
     const canvas = document.createElement('canvas');
     canvas.width = 8;
@@ -109,7 +105,7 @@ function createDiagonalPattern(colorHex) {
     return ctx.createPattern(canvas, 'repeat');
 }
 
-// ΕΞΥΠΝΗ ΑΝΤΙΣΤΟΙΧΙΣΗ (Mapping) ΟΝΟΜΑΤΩΝ ΜΟΝΑΔΩΝ
+// ΕΞΥΠΝΗ ΑΝΤΙΣΤΟΙΧΙΣΗ (Mapping) ΟΝΟΜΑΤΩΝ
 function getCanonicalUnitName(rawName) {
     if (!rawName) return "UNKNOWN";
     let clean = String(rawName).trim().toUpperCase();
@@ -184,7 +180,7 @@ function switchTab(tabId) {
 
     if (tabId === 'overview') updateOverviewTab();
     if (tabId === 'economics') updateEconomicsTab();
-    if (tabId === 'ispScada') updateMonthlyTab(); // Τώρα το ispScada οδηγεί στο Monthly
+    if (tabId === 'ispScada') updateMonthlyTab(); 
 }
 
 // ==========================================
@@ -430,10 +426,9 @@ function updateMonthlyTab() {
     const monthSelect = document.getElementById('monthSelect');
     if (!monthSelect || !rawData || !rawData.scada) return;
     
-    const selectedMonth = monthSelect.value; // π.χ. "2026-08"
+    const selectedMonth = monthSelect.value; 
     if (!selectedMonth) return;
 
-    // Εύρεση όλων των μοναδικών ημερομηνιών του επιλεγμένου μήνα
     const allDatesInMonth = [...new Set([
         ...rawData.henex.map(d => parseDate(Object.values(d)[0])),
         ...rawData.scada.map(d => parseDate(Object.values(d)[0]))
@@ -442,22 +437,23 @@ function updateMonthlyTab() {
     const labels = [];
     const hgsidaData = [];
     const avgCostData = [];
+    const effData = []; // Ο νέος πίνακας για το Fleet Efficiency
 
     allDatesInMonth.forEach(day => {
-        // Παίρνουμε μόνο τον αριθμό της ημέρας (π.χ. "15" από "2026-08-15") για καθαρότητα στον άξονα Χ
         const dayNumber = day.split('-')[2];
         labels.push(dayNumber);
 
-        // 1. Υπολογισμός HGSIDA
+        // 1. HGSIDA
         let hgsida = 0;
         const henexDay = rawData.henex.find(d => parseDate(Object.values(d)[0]) === day);
         if (henexDay) hgsida = parseNum(Object.values(henexDay)[1]);
         hgsidaData.push(hgsida);
 
-        // 2. Υπολογισμός Fleet Average Gas Cost
+        // 2 & 3. Fleet Avg Gas Cost & Fleet Efficiency
         const scadaDay = rawData.scada.filter(d => parseDate(Object.values(d)[0]) === day);
         let dailyTotalMwh = 0;
         let dailyTotalCost = 0;
+        let dailyTotalTheoreticalFuel = 0;
 
         scadaDay.forEach(d => {
             let uName = String(Object.values(d)[1].trim());
@@ -470,16 +466,20 @@ function updateMonthlyTab() {
 
             dailyTotalMwh += val;
             dailyTotalCost += (val * unitCostPerMwh);
+            dailyTotalTheoreticalFuel += (val / eff);
         });
 
         const dailyAvgCost = dailyTotalMwh > 0 ? (dailyTotalCost / dailyTotalMwh) : 0;
         avgCostData.push(dailyAvgCost);
+
+        const dailyEff = dailyTotalTheoreticalFuel > 0 ? (dailyTotalMwh / dailyTotalTheoreticalFuel) * 100 : 0;
+        effData.push(dailyEff);
     });
 
-    renderMonthlyChart(labels, hgsidaData, avgCostData);
+    renderMonthlyChart(labels, hgsidaData, avgCostData, effData);
 }
 
-function renderMonthlyChart(labels, hgsidaData, avgCostData) {
+function renderMonthlyChart(labels, hgsidaData, avgCostData, effData) {
     const canvas = document.getElementById('monthlyChart');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -502,7 +502,8 @@ function renderMonthlyChart(labels, hgsidaData, avgCostData) {
                     borderWidth: 2,
                     tension: 0.3,
                     pointRadius: 3,
-                    pointBackgroundColor: '#3b82f6'
+                    pointBackgroundColor: '#3b82f6',
+                    yAxisID: 'y' // Συνδέεται με τον αριστερό άξονα Y
                 }, 
                 { 
                     label: 'Fleet Avg Gas Cost (€/MWh)', 
@@ -512,7 +513,20 @@ function renderMonthlyChart(labels, hgsidaData, avgCostData) {
                     borderWidth: 2,
                     tension: 0.3,
                     pointRadius: 3,
-                    pointBackgroundColor: '#f59e0b'
+                    pointBackgroundColor: '#f59e0b',
+                    yAxisID: 'y' // Συνδέεται με τον αριστερό άξονα Y
+                },
+                {
+                    label: 'Fleet Avg Efficiency (%)',
+                    data: effData,
+                    borderColor: '#10b981', // Emerald (Πράσινο)
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    borderWidth: 2,
+                    borderDash: [5, 5], // Διακεκομμένη γραμμή για να ξεχωρίζει ως δείκτης ποιότητας
+                    tension: 0.3,
+                    pointRadius: 3,
+                    pointBackgroundColor: '#10b981',
+                    yAxisID: 'y1' // Συνδέεται με τον ΝΕΟ δεξιό άξονα Y
                 }
             ] 
         }, 
@@ -532,7 +546,13 @@ function renderMonthlyChart(labels, hgsidaData, avgCostData) {
                         label: function(context) {
                             let label = context.dataset.label || '';
                             if (label) label += ': ';
-                            label += context.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' €';
+                            if (context.dataset.yAxisID === 'y1') {
+                                // Αν είναι η απόδοση, εμφάνισε ποσοστό %
+                                label += context.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' %';
+                            } else {
+                                // Αν είναι κόστος/τιμή, εμφάνισε Ευρώ €
+                                label += context.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' €';
+                            }
                             return label;
                         }
                     }
@@ -544,9 +564,23 @@ function renderMonthlyChart(labels, hgsidaData, avgCostData) {
                     title: { display: true, text: 'Day of Month', color: '#64748b' }
                 }, 
                 y: { 
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
                     grid: { color: '#334155' },
                     title: { display: true, text: '€ / MWh' }
-                } 
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    min: 50,
+                    max: 63,
+                    grid: { 
+                        drawOnChartArea: false // Για να μην μπερδεύονται τα grid lines με του αριστερού άξονα
+                    },
+                    title: { display: true, text: 'Efficiency (%)' }
+                }
             },
             interaction: {
                 mode: 'nearest',
