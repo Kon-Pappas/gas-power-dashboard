@@ -591,31 +591,29 @@ function renderMonthlyChart(labels, hgsidaData, avgCostData, effData) {
 // ==========================================
 function updateSurplusTab() {
     const monthSelect = document.getElementById('monthSelectSurplus');
-    if (!monthSelect || !rawData || !rawData.daily_surplus || !rawData.daily_gas_constraints || !rawData.scada_generation_hourly) return;
+    if (!monthSelect || !rawData || !rawData.daily_surplus || !rawData.daily_gas_constraints || !rawData.scadaHourly) return;
     
     const selectedMonth = monthSelect.value;
     if (!selectedMonth) return;
 
-    // 1. Δομή για να κρατάμε ποιες ώρες (1-24) κάθε μονάδα ήταν υπό Constraint ανά ημέρα
+    // 1. Δομή για τα Constraints ανά ημέρα και μονάδα
     let constraintsByDay = {};
     
     rawData.daily_gas_constraints.forEach(c => {
-        let d = parseDate(c["Date"] || Object.values(c)[0]);
+        let vals = Object.values(c);
+        let d = parseDate(vals[0]); // 1η στήλη: Ημερομηνία
         if (!d.startsWith(selectedMonth)) return;
         
-        let unit = getCanonicalUnitName(c["Gas Factory"] || Object.values(c)[1]);
-        let hFrom = getHourNumber(c["Hour From"] || Object.values(c)[2]);
-        let hTo = getHourNumber(c["Hour To"] || Object.values(c)[3]);
+        let unit = getCanonicalUnitName(vals[1]); // 2η στήλη: Gas Factory
+        let hFrom = getHourNumber(vals[2]);       // 3η στήλη: Hour From
+        let hTo = getHourNumber(vals[3]);         // 4η στήλη: Hour To
         
         if (hFrom !== -1 && hTo !== -1) {
             if (!constraintsByDay[d]) constraintsByDay[d] = {};
             if (!constraintsByDay[d][unit]) constraintsByDay[d][unit] = {};
             
-            // --- ΔΙΟΡΘΩΣΗ: Ακριβής Αντιστοίχιση Ωρών ---
-            // Το διάστημα π.χ. 9:59 -> 14:59 μεταφράζεται σε hFrom=10, hTo=15.
-            // Ο χρήστης θέλει τις στήλες: 10:00, 11:00, 12:00, 13:00, 14:00 (δηλαδή index ωρών 10 έως 14)
-            let hStart = Math.min(hFrom, hTo);         // 10
-            let hEnd = Math.max(hFrom, hTo) - 1;       // 15 - 1 = 14
+            let hStart = Math.min(hFrom, hTo);     
+            let hEnd = Math.max(hFrom, hTo) - 1;   
             
             for (let h = hStart; h <= hEnd; h++) {
                 constraintsByDay[d][unit][h] = true;
@@ -623,31 +621,26 @@ function updateSurplusTab() {
         }
     });
 
-    // 2. Υπολογισμός των παραχθέντων MWh (Generic Constraints) βάσει του SCADA Hourly
+    // 2. Υπολογισμός MWh (Generic Constraints) βάσει του SCADA Hourly
     let dailyConstrainedMwh = {};
-    rawData.scada_generation_hourly.forEach(row => {
-        let d = parseDate(row["Ημερομηνία"] || Object.values(row)[0]);
+    rawData.scadaHourly.forEach(row => {
+        let vals = Object.values(row);
+        let d = parseDate(vals[0]); // 1η στήλη: Ημερομηνία
         if (!d.startsWith(selectedMonth)) return;
         if (!constraintsByDay[d]) return; 
         
-        let rawUnit = String(row["Μονάδα Φ.Α."] || Object.values(row)[1]).trim();
+        let rawUnit = String(vals[1] || "").trim(); // 2η στήλη: Μονάδα Φ.Α.
         if (rawUnit === "TOTAL GAS UNITS" || rawUnit.includes("Σύνολο") || rawUnit === "NAN") return;
         
         let cUnit = getCanonicalUnitName(rawUnit);
         
-        // Αν η μονάδα αυτή είχε constraints τη συγκεκριμένη μέρα
         if (constraintsByDay[d][cUnit]) {
             if (!dailyConstrainedMwh[d]) dailyConstrainedMwh[d] = 0;
             
-            // Αθροίζουμε την παραγωγή ΜΟΝΟ για τις ώρες που ίσχυε ο περιορισμός
             for (let h = 1; h <= 24; h++) {
                 if (constraintsByDay[d][cUnit][h]) {
-                    // Στο Object.values(row):
-                    // θέση 0 = ημερομηνία, θέση 1 = μονάδα
-                    // θέσεις 2-25 είναι οι ώρες 01:00 έως 24:00.
-                    // Συνεπώς, για h=10 (που είναι το 10:00), ο δείκτης είναι h + 1 = 11.
-                    let hIdx = h + 1; 
-                    let val = parseNum(Object.values(row)[hIdx]);
+                    let hIdx = h + 1; // Στήλες 2 έως 25 είναι οι ώρες 01:00 έως 24:00
+                    let val = parseNum(vals[hIdx]);
                     dailyConstrainedMwh[d] += val;
                 }
             }
@@ -657,9 +650,10 @@ function updateSurplusTab() {
     // 3. Διάβασμα του Daily Surplus
     let dailySurplusMap = {};
     rawData.daily_surplus.forEach(row => {
-        let d = parseDate(row["Date"] || Object.values(row)[0]);
+        let vals = Object.values(row);
+        let d = parseDate(vals[0]); // 1η στήλη: Ημερομηνία
         if (d.startsWith(selectedMonth)) {
-            let val = parseNum(row["Total Daily Surplus (MWh)"] || Object.values(row)[1]);
+            let val = parseNum(vals[1]); // 2η στήλη: Total Daily Surplus (MWh)
             dailySurplusMap[d] = val;
         }
     });
@@ -673,7 +667,7 @@ function updateSurplusTab() {
     let sumSurplus = 0;
     let sumConstraints = 0;
 
-    allDatesInMonth.forEach(day => {
+    allDatesInMonth.flows = allDatesInMonth.forEach(day => {
         labels.push(day.split('-')[2]); 
         
         let s = dailySurplusMap[day] || 0;
