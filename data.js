@@ -11,8 +11,8 @@ let rawData = {
     henex: [], 
     mcpHourly: [], 
     efficiency: [],
-    daily_surplus: [],          // <--- ΠΡΟΣΘΗΚΗ
-    daily_gas_constraints: []   // <--- ΠΡΟΣΘΗΚΗ
+    daily_surplus: [],          
+    daily_gas_constraints: []   
 };
 
 let currentLang = 'en'; 
@@ -120,22 +120,67 @@ function updateFreshness(dates) {
     document.getElementById('nextUpdateVal').innerText = formattedNext;
 }
 
-// Λήψη δεδομένων από Google Apps Script
+// ΕΠΑΓΓΕΛΜΑΤΙΚΗ ΡΟΗ ΦΟΡΤΩΣΗΣ ΜΕ STEPS & DYNAMIC TAB TITLES
 async function fetchMarketData() {
+    const overlay = document.getElementById('loading-overlay');
+    const progressBar = document.getElementById('loading-progress-bar');
+    const progressPercentage = document.getElementById('loading-percentage');
+    const loadingSubtitle = document.getElementById('loading-subtitle');
+
+    function updateProgress(percent, text) {
+        if (progressBar) progressBar.style.width = percent + '%';
+        if (progressPercentage) progressPercentage.innerText = percent + '%';
+        if (loadingSubtitle) loadingSubtitle.innerText = text;
+    }
+
+    const lang = currentLang || 'en';
+    const texts = {
+        en: [
+            { p: 15, t: "Initializing Dashboard..." },
+            { p: 30, t: `loading Market Data (${i18n.en.tabOverview})` },
+            { p: 50, t: `loading Market Data (${i18n.en.tabEconomics})` },
+            { p: 75, t: `loading Market Data (${i18n.en.tabSurplus})` }
+        ],
+        el: [
+            { p: 15, t: "Αρχικοποίηση Dashboard..." },
+            { p: 30, t: `Φόρτωση Δεδομένων (${i18n.el.tabOverview})` },
+            { p: 50, t: `Φόρτωση Δεδομένων (${i18n.el.tabEconomics})` },
+            { p: 75, t: `Φόρτωση Δεδομένων (${i18n.el.tabSurplus})` }
+        ]
+    };
+
+    let stepIndex = 0;
+    let activeSteps = texts[lang];
+    updateProgress(activeSteps[0].p, activeSteps[0].t);
+
+    // Σταδιακή προσομοίωση προόδου όσο περιμένουμε την απάντηση του δικτύου
+    let progressInterval = setInterval(() => {
+        stepIndex++;
+        if (stepIndex < activeSteps.length) {
+            updateProgress(activeSteps[stepIndex].p, activeSteps[stepIndex].t);
+        } else {
+            clearInterval(progressInterval);
+        }
+    }, 450);
+
     try {
         const response = await fetch(API_URL);
+        clearInterval(progressInterval); // Σταματάμε το simulation αφού ήρθαν τα δεδομένα
+
         if (!response.ok) throw new Error("Network response was not ok");
         
         const json = await response.json();
         
+        updateProgress(90, lang === 'el' ? "Επεξεργασία Δεδομένων..." : "Processing Data...");
+
         rawData.isp = json.isp_generation || [];
         rawData.scada = json.scada_generation || [];
         rawData.scadaHourly = json.scada_generation_hourly || [];
         rawData.henex = json.henex_indices || [];
         rawData.mcpHourly = json.dam_mcp_hourly || [];
         rawData.efficiency = json.thermal_efficiency || [];
-        rawData.daily_surplus = json.daily_surplus || [];                // <--- ΠΡΟΣΘΗΚΗ
-        rawData.daily_gas_constraints = json.daily_gas_constraints || []; // <--- ΠΡΟΣΘΗΚΗ
+        rawData.daily_surplus = json.daily_surplus || [];                
+        rawData.daily_gas_constraints = json.daily_gas_constraints || []; 
         
         console.log("Data successfully loaded:", rawData);
 
@@ -151,22 +196,25 @@ async function fetchMarketData() {
 
         updateFreshness(dates);
 
-        const overlay = document.getElementById('loading-overlay');
+        // 100% Ολοκλήρωση
+        updateProgress(100, lang === 'el' ? "Ολοκλήρωση Dashboard..." : "Finalizing Dashboard...");
+
         if (overlay) {
-            document.getElementById('loading-percentage').innerText = "100%";
-            document.getElementById('loading-progress-bar').style.width = "100%";
             setTimeout(() => {
                 overlay.classList.add('opacity-0');
                 setTimeout(() => overlay.style.display = 'none', 500);
-            }, 800);
+            }, 400);
         }
         
-        setLang('en');
+        setLang(currentLang);
 
     } catch (error) {
+        clearInterval(progressInterval);
         console.error("Error loading market data:", error);
-        document.getElementById('loading-subtitle').innerText = "Network Error or CORS issue.";
-        document.getElementById('loading-subtitle').classList.add('text-rose-400');
+        if (loadingSubtitle) {
+            loadingSubtitle.innerText = "Network Error or CORS issue.";
+            loadingSubtitle.classList.add('text-rose-400');
+        }
     }
 }
 
