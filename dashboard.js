@@ -11,25 +11,6 @@ let monthlyChartInst = null;
 let surplusChartInst = null;
 let selectorsInitialized = false;
 
-// Έξυπνη επιδιόρθωση του λεξικού i18n
-document.addEventListener("DOMContentLoaded", () => {
-    setTimeout(() => {
-        if (typeof i18n !== 'undefined') {
-            if (i18n.en) {
-                i18n.en.tabIspScada = "Monthly Analytics";
-                i18n.en.tabSurplus = "System Needs (Surplus)";
-            }
-            if (i18n.el) {
-                i18n.el.tabIspScada = "Μηνιαία Ανάλυση";
-                i18n.el.tabSurplus = "Ανάγκες Συστήματος (Surplus)";
-            }
-            if (typeof setLang === 'function' && typeof currentLang !== 'undefined') {
-                setLang(currentLang);
-            }
-        }
-    }, 500); 
-});
-
 // ==========================================
 // HELPERS
 // ==========================================
@@ -59,7 +40,6 @@ function syncDate(sourceId, targetId) {
     }
 }
 
-// Συνάρτηση μετατροπής της ώρας (π.χ. "9:59" -> 10)
 function getHourNumber(timeStr) {
     if (timeStr === undefined || timeStr === null || timeStr === "") return -1;
     let s = String(timeStr).trim();
@@ -612,11 +592,9 @@ function updateSurplusTab() {
         let hFromInt = parseInt(hFromParts[0], 10) || 0;
         let hToInt = parseInt(hToParts[0], 10) || 0;
         
-        // --- Η ΜΕΓΑΛΗ ΔΙΟΡΘΩΣΗ: Σωστή αντιστοίχιση στις Στήλες M, N, O, P ---
-        // 9:59 -> 11η ώρα (Στήλη M του Excel)
-        // 13:59 -> 14η ώρα (Στήλη P του Excel)
-        let hStart = hFromInt + 2; 
-        let hEnd = hToInt + 1;     
+        // 9:59 -> 10η ώρα, 13:59 -> 13η ώρα
+        let hStart = hFromInt + 1; 
+        let hEnd = hToInt;         
         
         if (hStart <= hEnd) {
             if (!constraintsByDay[d]) constraintsByDay[d] = {};
@@ -648,10 +626,9 @@ function updateSurplusTab() {
             
             let window = constraintsByDay[d][cUnit];
             
-            // Άθροισμα των στηλών SCADA για τις σωστές ώρες (π.χ. 11, 12, 13, 14)
             for (let h = window.hStart; h <= window.hEnd; h++) {
                 if (h >= 1 && h <= 24) {
-                    let hIdx = h + 1; // Index 2 είναι η 1η ώρα (01:00), άρα η 11η ώρα είναι το index 12
+                    let hIdx = h + 1; // Index 2 είναι η 1η ώρα (01:00)
                     let val = parseNum(vals[hIdx]);
                     dailyConstrainedMwh[d] += val;
                 }
@@ -698,6 +675,7 @@ function updateSurplusTab() {
 
     renderSurplusChart(labels, surplusData, constraintsData);
 }
+
 function renderSurplusChart(labels, surplusData, constraintsData) {
     const canvas = document.getElementById('surplusChart');
     if (!canvas) return;
