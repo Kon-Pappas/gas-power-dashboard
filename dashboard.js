@@ -612,9 +612,11 @@ function updateSurplusTab() {
         let hFromInt = parseInt(hFromParts[0], 10) || 0;
         let hToInt = parseInt(hToParts[0], 10) || 0;
         
-        // --- ΔΙΟΡΘΩΣΗ: Σωστή αντιστοίχιση ωρών (π.χ. 9:59 - 13:59 -> Ώρες 10, 11, 12, 13) ---
-        let hStart = hFromInt + 1; // 9:59 -> 10η ώρα
-        let hEnd = hToInt;         // 13:59 -> 13η ώρα
+        // --- Η ΜΕΓΑΛΗ ΔΙΟΡΘΩΣΗ: Σωστή αντιστοίχιση στις Στήλες M, N, O, P ---
+        // 9:59 -> 11η ώρα (Στήλη M του Excel)
+        // 13:59 -> 14η ώρα (Στήλη P του Excel)
+        let hStart = hFromInt + 2; 
+        let hEnd = hToInt + 1;     
         
         if (hStart <= hEnd) {
             if (!constraintsByDay[d]) constraintsByDay[d] = {};
@@ -646,10 +648,10 @@ function updateSurplusTab() {
             
             let window = constraintsByDay[d][cUnit];
             
-            // Άθροισμα των στηλών SCADA για τις σωστές ώρες (10 έως 13)
+            // Άθροισμα των στηλών SCADA για τις σωστές ώρες (π.χ. 11, 12, 13, 14)
             for (let h = window.hStart; h <= window.hEnd; h++) {
                 if (h >= 1 && h <= 24) {
-                    let hIdx = h + 1; // Index 2 είναι η 1η ώρα (01:00), άρα η 10η ώρα είναι στο index 11
+                    let hIdx = h + 1; // Index 2 είναι η 1η ώρα (01:00), άρα η 11η ώρα είναι το index 12
                     let val = parseNum(vals[hIdx]);
                     dailyConstrainedMwh[d] += val;
                 }
