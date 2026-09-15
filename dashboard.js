@@ -559,7 +559,7 @@ function renderMonthlyChart(labels, hgsidaData, avgCostData, effData) {
             scales: { 
                 x: { grid: { color: '#1e293b' }, title: { display: true, text: 'Day of Month', color: '#64748b' } }, 
                 y: { type: 'linear', display: true, position: 'left', grid: { color: '#334155' }, title: { display: true, text: '€ / MWh' } },
-                y1: { type: 'linear', display: true, position: 'right', min: 50, max: 63, grid: { drawOnChartArea: false }, title: { display: true, text: 'Efficiency (%)' } }
+                y1: { type: 'linear', display: true, position: 'right', min: 55, max: 62, grid: { drawOnChartArea: false }, title: { display: true, text: 'Efficiency (%)' } }
             },
             interaction: { mode: 'nearest', axis: 'x', intersect: false }
         } 
